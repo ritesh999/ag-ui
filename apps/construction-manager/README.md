@@ -27,6 +27,37 @@ npm run dev
 
 Then open http://localhost:3000.
 
+## Deployment
+
+This app is deployed to GitHub Pages via
+[`.github/workflows/deploy-construction-manager.yml`](../../.github/workflows/deploy-construction-manager.yml),
+which builds a static export (`next build` with `output: "export"`, gated
+behind the `GITHUB_PAGES_BUILD=true` env var so local dev/build are
+unaffected) and publishes it with `actions/deploy-pages`. It runs
+automatically on every push to `main` or this feature branch that touches
+`apps/construction-manager/**`.
+
+Since there's no "create project" flow (see below), every route the app can
+navigate to is known at build time, so the whole thing is static — no
+server, and no Vercel/Netlify account needed. RFIs, submittals, tasks, and
+daily logs you create still work on the static build; they're stored in
+your browser's `localStorage`, same as in dev.
+
+**One-time setup required** (this repository's GitHub Pages hasn't been
+turned on yet, and CI tooling in this environment can't flip repo settings
+on your behalf): go to **Settings → Pages** in the `ritesh999/ag-ui` repo
+and set **Build and deployment → Source** to **GitHub Actions**. After that,
+every push re-deploys automatically and the app is live at
+`https://ritesh999.github.io/ag-ui/`.
+
+To build the static export locally (e.g. to sanity-check it):
+
+```bash
+cd apps/construction-manager
+GITHUB_PAGES_BUILD=true npm run build
+npx serve out   # or any static file server
+```
+
 ## What's included
 
 - **Dashboard** (`/`) — portfolio-wide KPIs, items needing attention (overdue
