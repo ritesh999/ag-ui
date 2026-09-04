@@ -1,6 +1,7 @@
+"use client";
+
 import Link from "next/link";
 import {
-  AlertTriangle,
   Building2,
   ClipboardList,
   FileCheck2,
@@ -12,8 +13,6 @@ import { StatCard } from "@/components/StatCard";
 import { Badge } from "@/components/Badge";
 import {
   projects,
-  rfis,
-  submittals,
   openRfiCount,
   overdueRfiCount,
   openPunchCount,
@@ -23,8 +22,10 @@ import {
 } from "@/lib/data";
 import { formatCurrency, formatDate, daysUntil } from "@/lib/format";
 import { projectStatusTone, rfiStatusTone, priorityTone, labelize } from "@/lib/status";
+import { useAppData } from "@/lib/store";
 
 export default function DashboardPage() {
+  const { rfis, submittals, punchItems } = useAppData();
   const activeProjects = projects.filter((p) => p.status === "active").length;
   const totals = portfolioTotals();
   const spentPct = totals.budgeted > 0 ? Math.round((totals.spent / totals.budgeted) * 100) : 0;
@@ -50,20 +51,20 @@ export default function DashboardPage() {
         <StatCard label="Active Projects" value={String(activeProjects)} icon={Building2} />
         <StatCard
           label="Open RFIs"
-          value={String(openRfiCount())}
+          value={String(openRfiCount(rfis))}
           icon={ClipboardList}
           tone="amber"
-          hint={`${overdueRfiCount()} overdue`}
+          hint={`${overdueRfiCount(rfis)} overdue`}
         />
         <StatCard
           label="Pending Submittals"
-          value={String(pendingSubmittalCount())}
+          value={String(pendingSubmittalCount(submittals))}
           icon={FileCheck2}
           tone="default"
         />
         <StatCard
           label="Open Punch Items"
-          value={String(openPunchCount())}
+          value={String(openPunchCount(punchItems))}
           icon={ListChecks}
           tone="green"
         />
@@ -177,8 +178,8 @@ export default function DashboardPage() {
                     <td className="px-5 py-3 text-gray-900">{formatCurrency(p.contractValue, { compact: true })}</td>
                     <td className="px-5 py-3 text-gray-600">{used}%</td>
                     <td className="px-5 py-3">
-                      <span className={openRfiCount(p.id) > 0 ? "font-medium text-gray-900" : "text-gray-400"}>
-                        {openRfiCount(p.id)}
+                      <span className={openRfiCount(rfis, p.id) > 0 ? "font-medium text-gray-900" : "text-gray-400"}>
+                        {openRfiCount(rfis, p.id)}
                       </span>
                     </td>
                   </tr>

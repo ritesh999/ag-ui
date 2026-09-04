@@ -1,20 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { AlertCircle, CalendarClock, CircleDollarSign, Timer } from "lucide-react";
+import { AlertCircle, CalendarClock, CircleDollarSign, Plus, Timer } from "lucide-react";
 import { Rfi, RfiStatus } from "@/lib/types";
 import { Badge } from "./Badge";
 import { EmptyState } from "./SectionCard";
 import { rfiStatusTone, priorityTone, labelize } from "@/lib/status";
 import { formatDate, daysUntil } from "@/lib/format";
+import { useAppData } from "@/lib/store";
+import { NewRfiForm } from "./forms/NewRfiForm";
 
 const statusOptions: (RfiStatus | "all")[] = ["all", "open", "pending-response", "overdue", "closed"];
 
-export function RfiExplorer({ rfis }: { rfis: Rfi[] }) {
+export function RfiExplorer({ projectId, rfis }: { projectId: string; rfis: Rfi[] }) {
+  const { updateRfiStatus } = useAppData();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<RfiStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(rfis[0]?.id ?? null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [answerDraft, setAnswerDraft] = useState("");
 
   const filtered = useMemo(() => {
     return rfis.filter((r) => {
@@ -28,6 +33,16 @@ export function RfiExplorer({ rfis }: { rfis: Rfi[] }) {
   }, [rfis, query, status]);
 
   const selected = rfis.find((r) => r.id === selectedId) ?? filtered[0] ?? null;
+
+  useEffect(() => {
+    setAnswerDraft(selected?.answer ?? "");
+  }, [selected?.id]);
+
+  // Jump to a newly created RFI (added to the front of the list).
+  useEffect(() => {
+    setSelectedId(rfis[0]?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rfis[0]?.id]);
 
   return (
     <div>
@@ -52,7 +67,14 @@ export function RfiExplorer({ rfis }: { rfis: Rfi[] }) {
             </button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-gray-500">{filtered.length} of {rfis.length} RFIs</span>
+        <span className="text-xs text-gray-500">{filtered.length} of {rfis.length} RFIs</span>
+        <button
+          onClick={() => setFormOpen(true)}
+          className="ml-auto flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          <Plus className="h-4 w-4" />
+          New RFI
+        </button>
       </div>
 
       {rfis.length === 0 ? (
@@ -130,23 +152,68 @@ export function RfiExplorer({ rfis }: { rfis: Rfi[] }) {
                 <p className="text-sm leading-relaxed text-gray-800">{selected.question}</p>
               </div>
 
-              {selected.answer ? (
-                <div className="mb-2 rounded-lg border border-green-200 bg-green-50 p-4">
+              {selected.status === "closed" && selected.answer ? (
+                <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-4">
                   <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-green-700">
                     <AlertCircle className="h-3.5 w-3.5" /> Response
                   </p>
                   <p className="text-sm leading-relaxed text-green-900">{selected.answer}</p>
                 </div>
-              ) : (
-                <div className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-                  <CalendarClock className="h-4 w-4" />
+              ) : null}
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  {selected.status === "closed" ? "Reopen RFI" : "Respond & Close"}
+                </p>
+                {selected.status === "closed" ? (
+                  <button
+                    onClick={() => updateRfiStatus(selected.id, "open")}
+                    className="rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Reopen RFI
+                  </button>
+                ) : (
+                  <>
+                    <textarea
+                      value={answerDraft}
+                      onChange={(e) => setAnswerDraft(e.target.value)}
+                      rows={2}
+                      placeholder="Write a response before closing..."
+                      className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {selected.status !== "pending-response" ? (
+                        <button
+                          onClick={() => updateRfiStatus(selected.id, "pending-response", answerDraft || undefined)}
+                          className="rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          Mark Pending Response
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => updateRfiStatus(selected.id, "closed", answerDraft)}
+                        disabled={!answerDraft.trim()}
+                        className="rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Post Response &amp; Close
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {selected.status !== "closed" ? (
+                <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                  <CalendarClock className="h-3.5 w-3.5" />
                   Awaiting response from {selected.assignedTo}.
                 </div>
-              )}
+              ) : null}
             </div>
           ) : null}
         </div>
       )}
+
+      <NewRfiForm projectId={projectId} open={formOpen} onClose={() => setFormOpen(false)} />
     </div>
   );
 }

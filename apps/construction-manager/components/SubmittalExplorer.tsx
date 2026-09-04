@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { FileStack } from "lucide-react";
+import { FileStack, Plus } from "lucide-react";
 import { Submittal, SubmittalStatus } from "@/lib/types";
 import { Badge } from "./Badge";
 import { EmptyState } from "./SectionCard";
 import { submittalStatusTone, labelize } from "@/lib/status";
 import { formatDate, daysUntil } from "@/lib/format";
+import { useAppData } from "@/lib/store";
+import { NewSubmittalForm } from "./forms/NewSubmittalForm";
 
 const statusOptions: (SubmittalStatus | "all")[] = [
   "all",
@@ -19,10 +21,18 @@ const statusOptions: (SubmittalStatus | "all")[] = [
   "rejected",
 ];
 
-export function SubmittalExplorer({ submittals }: { submittals: Submittal[] }) {
+export function SubmittalExplorer({ projectId, submittals }: { projectId: string; submittals: Submittal[] }) {
+  const { updateSubmittalStatus } = useAppData();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<SubmittalStatus | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(submittals[0]?.id ?? null);
+  const [formOpen, setFormOpen] = useState(false);
+
+  // Jump to a newly created submittal (added to the front of the list).
+  useEffect(() => {
+    setSelectedId(submittals[0]?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submittals[0]?.id]);
 
   const filtered = useMemo(() => {
     return submittals.filter((s) => {
@@ -60,7 +70,14 @@ export function SubmittalExplorer({ submittals }: { submittals: Submittal[] }) {
             </button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-gray-500">{filtered.length} of {submittals.length} submittals</span>
+        <span className="text-xs text-gray-500">{filtered.length} of {submittals.length} submittals</span>
+        <button
+          onClick={() => setFormOpen(true)}
+          className="ml-auto flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          <Plus className="h-4 w-4" />
+          New Submittal
+        </button>
       </div>
 
       {submittals.length === 0 ? (
@@ -124,7 +141,7 @@ export function SubmittalExplorer({ submittals }: { submittals: Submittal[] }) {
                 <Meta label="Due" value={formatDate(selected.dueDate)} />
               </div>
 
-              <div className="flex items-start gap-3 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+              <div className="mb-4 flex items-start gap-3 rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
                 <FileStack className="mt-0.5 h-4 w-4 shrink-0" />
                 <p>
                   {selected.status === "in-review" || selected.status === "draft"
@@ -136,10 +153,62 @@ export function SubmittalExplorer({ submittals }: { submittals: Submittal[] }) {
                     : `Reviewed and closed out by ${selected.reviewer}.`}
                 </p>
               </div>
+
+              <div className="rounded-lg border border-gray-200 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Review Decision</p>
+                <div className="flex flex-wrap gap-2">
+                  {selected.status === "draft" ? (
+                    <button
+                      onClick={() => updateSubmittalStatus(selected.id, "in-review")}
+                      className="rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Submit for Review
+                    </button>
+                  ) : null}
+                  {selected.status === "in-review" || selected.status === "revise-resubmit" ? (
+                    <>
+                      <button
+                        onClick={() => updateSubmittalStatus(selected.id, "approved")}
+                        className="rounded-lg bg-green-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-green-700"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => updateSubmittalStatus(selected.id, "approved-as-noted")}
+                        className="rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Approve as Noted
+                      </button>
+                      <button
+                        onClick={() => updateSubmittalStatus(selected.id, "revise-resubmit")}
+                        className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+                      >
+                        Revise &amp; Resubmit
+                      </button>
+                      <button
+                        onClick={() => updateSubmittalStatus(selected.id, "rejected")}
+                        className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  ) : null}
+                  {["approved", "approved-as-noted", "rejected"].includes(selected.status) ? (
+                    <button
+                      onClick={() => updateSubmittalStatus(selected.id, "in-review")}
+                      className="rounded-lg border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Reopen for Review
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ) : null}
         </div>
       )}
+
+      <NewSubmittalForm projectId={projectId} open={formOpen} onClose={() => setFormOpen(false)} />
     </div>
   );
 }

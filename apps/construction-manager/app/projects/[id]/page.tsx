@@ -1,3 +1,5 @@
+"use client";
+
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ClipboardList, FileCheck2, ListChecks, Wallet } from "lucide-react";
@@ -17,14 +19,16 @@ import {
 } from "@/lib/data";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { rfiStatusTone, submittalStatusTone, labelize } from "@/lib/status";
+import { useAppData } from "@/lib/store";
 
 export default function ProjectOverviewPage({ params }: { params: { id: string } }) {
   const project = getProject(params.id);
+  const { rfis: allRfis, submittals: allSubmittals, dailyLogs: allLogs, punchItems } = useAppData();
   if (!project) notFound();
 
-  const rfis = getRfisForProject(project.id).slice(0, 4);
-  const submittals = getSubmittalsForProject(project.id).slice(0, 4);
-  const logs = getDailyLogsForProject(project.id).slice(0, 3);
+  const rfis = getRfisForProject(allRfis, project.id).slice(0, 4);
+  const submittals = getSubmittalsForProject(allSubmittals, project.id).slice(0, 4);
+  const logs = getDailyLogsForProject(allLogs, project.id).slice(0, 3);
   const totals = projectTotals(project.id);
   const usedPct = totals.budgeted > 0 ? Math.round((totals.spent / totals.budgeted) * 100) : 0;
   const committedPct = totals.budgeted > 0 ? Math.round((totals.committed / totals.budgeted) * 100) : 0;
@@ -36,9 +40,9 @@ export default function ProjectOverviewPage({ params }: { params: { id: string }
   return (
     <div>
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Open RFIs" value={String(openRfiCount(project.id))} icon={ClipboardList} tone="amber" />
-        <StatCard label="Pending Submittals" value={String(pendingSubmittalCount(project.id))} icon={FileCheck2} />
-        <StatCard label="Open Punch Items" value={String(openPunchCount(project.id))} icon={ListChecks} tone="green" />
+        <StatCard label="Open RFIs" value={String(openRfiCount(allRfis, project.id))} icon={ClipboardList} tone="amber" />
+        <StatCard label="Pending Submittals" value={String(pendingSubmittalCount(allSubmittals, project.id))} icon={FileCheck2} />
+        <StatCard label="Open Punch Items" value={String(openPunchCount(punchItems, project.id))} icon={ListChecks} tone="green" />
         <StatCard
           label="Budget Used"
           value={`${usedPct}%`}

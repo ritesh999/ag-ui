@@ -9,10 +9,12 @@ import { projects, openRfiCount, openPunchCount, projectTotals } from "@/lib/dat
 import { formatCurrency, formatDate } from "@/lib/format";
 import { projectStatusTone, labelize } from "@/lib/status";
 import { ProjectStatus } from "@/lib/types";
+import { useAppData } from "@/lib/store";
 
 const statusFilters: (ProjectStatus | "all")[] = ["all", "active", "on-hold", "closeout", "complete"];
 
 export default function ProjectsPage() {
+  const { rfis, punchItems } = useAppData();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<ProjectStatus | "all">("all");
 
@@ -107,7 +109,7 @@ export default function ProjectsPage() {
                 <div>
                   <p className="text-gray-400">Open Items</p>
                   <p className="font-medium text-gray-900">
-                    {openRfiCount(p.id)} RFIs &middot; {openPunchCount(p.id)} punch
+                    {openRfiCount(rfis, p.id)} RFIs &middot; {openPunchCount(punchItems, p.id)} punch
                   </p>
                 </div>
               </div>

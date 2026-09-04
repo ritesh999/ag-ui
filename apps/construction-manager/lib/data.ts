@@ -732,27 +732,33 @@ export const budgetLineItems: BudgetLineItem[] = projects.flatMap((p, idx) =>
 );
 
 // ---- selectors ----
+//
+// RFIs, submittals, daily logs, and punch items are mutable at runtime (see
+// lib/store.tsx), so these selectors take the current list explicitly rather
+// than reading the seed arrays above directly. `projects`, `documents`,
+// `budgetLineItems`, and `team` are not editable in this app and are read
+// directly from the seed arrays.
 
 export function getProject(id: string) {
   return projects.find((p) => p.id === id);
 }
 
-export function getRfisForProject(projectId: string) {
-  return rfis.filter((r) => r.projectId === projectId);
+export function getRfisForProject(list: Rfi[], projectId: string) {
+  return list.filter((r) => r.projectId === projectId);
 }
 
-export function getSubmittalsForProject(projectId: string) {
-  return submittals.filter((s) => s.projectId === projectId);
+export function getSubmittalsForProject(list: Submittal[], projectId: string) {
+  return list.filter((s) => s.projectId === projectId);
 }
 
-export function getDailyLogsForProject(projectId: string) {
-  return dailyLogs
+export function getDailyLogsForProject(list: DailyLog[], projectId: string) {
+  return list
     .filter((l) => l.projectId === projectId)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
-export function getPunchItemsForProject(projectId: string) {
-  return punchItems.filter((t) => t.projectId === projectId);
+export function getPunchItemsForProject(list: PunchItem[], projectId: string) {
+  return list.filter((t) => t.projectId === projectId);
 }
 
 export function getDocumentsForProject(projectId: string) {
@@ -785,22 +791,22 @@ export function portfolioTotals() {
   );
 }
 
-export function openRfiCount(projectId?: string) {
-  const list = projectId ? getRfisForProject(projectId) : rfis;
+export function openRfiCount(all: Rfi[], projectId?: string) {
+  const list = projectId ? getRfisForProject(all, projectId) : all;
   return list.filter((r) => r.status === "open" || r.status === "pending-response" || r.status === "overdue").length;
 }
 
-export function overdueRfiCount(projectId?: string) {
-  const list = projectId ? getRfisForProject(projectId) : rfis;
+export function overdueRfiCount(all: Rfi[], projectId?: string) {
+  const list = projectId ? getRfisForProject(all, projectId) : all;
   return list.filter((r) => r.status === "overdue").length;
 }
 
-export function openPunchCount(projectId?: string) {
-  const list = projectId ? getPunchItemsForProject(projectId) : punchItems;
+export function openPunchCount(all: PunchItem[], projectId?: string) {
+  const list = projectId ? getPunchItemsForProject(all, projectId) : all;
   return list.filter((t) => t.status !== "closed").length;
 }
 
-export function pendingSubmittalCount(projectId?: string) {
-  const list = projectId ? getSubmittalsForProject(projectId) : submittals;
+export function pendingSubmittalCount(all: Submittal[], projectId?: string) {
+  const list = projectId ? getSubmittalsForProject(all, projectId) : all;
   return list.filter((s) => s.status === "in-review" || s.status === "draft" || s.status === "revise-resubmit").length;
 }
