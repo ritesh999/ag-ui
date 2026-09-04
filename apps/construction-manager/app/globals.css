@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: #f4f6f8;
+  color: #101828;
+}
+
+* {
+  border-color: #e4e7ec;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #d0d5dd;
+  border-radius: 9999px;
+  border: 2px solid #f4f6f8;
+}
+
+.table-sticky-head thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
