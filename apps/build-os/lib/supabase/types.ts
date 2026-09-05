@@ -371,6 +371,45 @@ export interface Database {
         };
         Relationships: [];
       };
+      audit_log: {
+        Row: {
+          id: string;
+          organization_id: string;
+          actor_user_id: string | null;
+          occurred_at: string;
+          table_name: string;
+          record_id: string;
+          action: "insert" | "update" | "delete";
+          field_name: string | null;
+          old_value: unknown;
+          new_value: unknown;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          actor_user_id?: string | null;
+          occurred_at?: string;
+          table_name: string;
+          record_id: string;
+          action: "insert" | "update" | "delete";
+          field_name?: string | null;
+          old_value?: unknown;
+          new_value?: unknown;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          actor_user_id?: string | null;
+          occurred_at?: string;
+          table_name?: string;
+          record_id?: string;
+          action?: "insert" | "update" | "delete";
+          field_name?: string | null;
+          old_value?: unknown;
+          new_value?: unknown;
+        };
+        Relationships: [];
+      };
       document_categories: {
         Row: { id: string; code: string; label: string; sort_order: number };
         Insert: { id?: string; code: string; label: string; sort_order?: number };

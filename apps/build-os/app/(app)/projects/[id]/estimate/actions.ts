@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logFieldChanges, logRowEvent } from "@/lib/audit-log";
 
 type FormState = { error?: string } | undefined;
 
@@ -133,6 +134,12 @@ export async function updatePricingLine(_prevState: FormState, formData: FormDat
   if (!values) return { error };
 
   const supabase = await createClient();
+
+  // Spec 6 calls out pricing_lines.rate/quantity by name as needing an
+  // audit trail — fetch the pre-edit values so the log records what
+  // actually changed, not just that a write happened.
+  const { data: before } = await supabase.from("pricing_lines").select("quantity, rate").eq("id", lineId).single();
+
   const { error: dbError } = await supabase
     .from("pricing_lines")
     .update({
@@ -148,13 +155,37 @@ export async function updatePricingLine(_prevState: FormState, formData: FormDat
 
   if (dbError) return { error: dbError.message };
 
+  if (before) {
+    await logFieldChanges(supabase, values.organization_id, "pricing_lines", lineId, before, {
+      quantity: values.quantity,
+      rate: values.rate,
+    });
+  }
+
   revalidatePath(`/projects/${values.project_id}/estimate`);
   return {};
 }
 
 export async function deletePricingLine(lineId: string, projectId: string) {
   const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("pricing_lines")
+    .select("organization_id, project_id, item_code, description, quantity, rate, cost_type")
+    .eq("id", lineId)
+    .single();
+
   await supabase.from("pricing_lines").delete().eq("id", lineId);
+
+  if (row) {
+    await logRowEvent(supabase, {
+      organizationId: row.organization_id,
+      tableName: "pricing_lines",
+      recordId: lineId,
+      action: "delete",
+      row,
+    });
+  }
+
   revalidatePath(`/projects/${projectId}/estimate`);
 }
 
@@ -192,19 +223,39 @@ export async function updateMarkupSettings(_prevState: FormState, formData: Form
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("markup_settings").upsert(
-    {
-      organization_id: organizationId,
-      project_id: projectId,
+
+  const { data: before } = await supabase
+    .from("markup_settings")
+    .select("id, margin_pct, risk_pct, corporate_overheads_pct, formula_mode")
+    .eq("project_id", projectId)
+    .maybeSingle();
+
+  const { data: after, error } = await supabase
+    .from("markup_settings")
+    .upsert(
+      {
+        organization_id: organizationId,
+        project_id: projectId,
+        margin_pct: marginPct,
+        risk_pct: riskPct,
+        corporate_overheads_pct: overheadsPct,
+        formula_mode: formulaMode,
+      },
+      { onConflict: "project_id" },
+    )
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+
+  if (before) {
+    await logFieldChanges(supabase, organizationId, "markup_settings", after.id, before, {
       margin_pct: marginPct,
       risk_pct: riskPct,
       corporate_overheads_pct: overheadsPct,
       formula_mode: formulaMode,
-    },
-    { onConflict: "project_id" },
-  );
-
-  if (error) return { error: error.message };
+    });
+  }
 
   revalidatePath(`/projects/${projectId}/estimate`);
   return {};

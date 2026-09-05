@@ -38,6 +38,17 @@ as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 
+-- Real Supabase grants USAGE on schema auth and EXECUTE on auth.uid() to
+-- anon/authenticated (and public) by default — RLS policies that call
+-- auth.uid() (or app.current_user_id(), which just wraps it) directly,
+-- rather than through a SECURITY DEFINER function, rely on this. Missing
+-- from this stub until the audit_log RLS test caught it: every earlier
+-- test's direct-policy paths (audit_log_insert, the `users` self-select)
+-- happened to run before `set role app_user`, as the (bypassrls) owner,
+-- so the gap went unnoticed.
+grant usage on schema auth to anon, authenticated, service_role;
+grant execute on function auth.uid() to anon, authenticated, service_role, public;
+
 -- Minimal stand-in for Supabase Storage (used by 0011_storage.sql):
 -- just enough of storage.buckets/storage.objects/storage.foldername to
 -- exercise the RLS policies. Not a real implementation of Storage's

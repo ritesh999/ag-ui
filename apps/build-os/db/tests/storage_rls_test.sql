@@ -37,15 +37,35 @@ values ('project-documents', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/cccccccc-cccc
 select count(*) as should_be_1 from storage.objects
 where name = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/cccccccc-cccc-cccc-cccc-cccccccccccc/scope.pdf';
 
+-- TEST 2 and 3 expect an RLS violation, and are NOT the last statements in
+-- this file — letting the raw INSERT fail would trip -v ON_ERROR_STOP=1
+-- and abort the script before tests 4-6 ever ran (exactly what happened
+-- here until this fix: the file could only ever validate up through
+-- whichever expected-failure statement came first, despite claiming to
+-- cover all 6). Wrapped in a DO block that catches the specific
+-- insufficient_privilege exception and re-raises anything else, so a
+-- genuine bug still aborts the run instead of being swallowed.
 \echo '=== TEST 2: Alice CANNOT upload into the sample project ==='
-insert into storage.objects (bucket_id, name)
-values ('project-documents', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/dddddddd-dddd-dddd-dddd-dddddddddddd/hack.pdf');
--- EXPECT: ERROR — RLS policy violation (this is the pass condition).
+do $$
+begin
+  insert into storage.objects (bucket_id, name)
+  values ('project-documents', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/dddddddd-dddd-dddd-dddd-dddddddddddd/hack.pdf');
+  raise exception 'TEST 2 FAILED: insert should have been rejected by RLS';
+exception
+  when insufficient_privilege then
+    raise notice 'TEST 2 PASSED: insert correctly rejected by RLS';
+end $$;
 
 \echo '=== TEST 3: Alice CANNOT upload into Betas project (not her org) ==='
-insert into storage.objects (bucket_id, name)
-values ('project-documents', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee/hack.pdf');
--- EXPECT: ERROR — RLS policy violation.
+do $$
+begin
+  insert into storage.objects (bucket_id, name)
+  values ('project-documents', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee/hack.pdf');
+  raise exception 'TEST 3 FAILED: insert should have been rejected by RLS';
+exception
+  when insufficient_privilege then
+    raise notice 'TEST 3 PASSED: insert correctly rejected by RLS';
+end $$;
 
 reset role;
 

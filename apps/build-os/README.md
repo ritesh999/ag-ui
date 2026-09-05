@@ -106,6 +106,14 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   doesn't include a DnD library, and swapping `sort_order` with the
   adjacent sibling (within the same section, or the whole indirect band)
   covers the same requirement without adding one.
+- **Audit log, retrofitted**: `0008_audit_log.sql`'s own header flagged
+  wiring a small `log_change`-style helper for `pricing_lines.rate` /
+  `.quantity` and `markup_settings.*` as something to confirm "before
+  step 5 ... since that's the first place it's actually exercised" — that
+  never happened while step 5 was first built. Added afterward rather
+  than left as a permanent gap: `lib/audit-log.ts` (`logFieldChanges` for
+  edits, `logRowEvent` for whole-row inserts/deletes) is now called from
+  `updatePricingLine`, `deletePricingLine`, and `updateMarkupSettings`.
 
 ### What step 2 decided (all confirmed, all built accordingly)
 
@@ -164,6 +172,10 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   `recompute_project_pricing()` produce identical numbers (to floating-
   point precision) across 5 fixtures / 12 lines, including a repeating-
   decimal share and the zero-direct-total edge case. All match exactly.
+- `db/tests/audit_log_test.sql`: the RLS insert policy accepts both write
+  shapes `lib/audit-log.ts` sends (a field-level update row, a whole-row
+  delete row) and rejects an authenticated user attributing a change to
+  someone else's `actor_user_id`. 3/3 scenarios pass.
 - All of the above were run against a real local Postgres 16 with a
   stubbed `auth`/`storage` schema (no live Supabase project or Docker
   daemon available in this environment — flagged, not skipped silently).
@@ -178,6 +190,41 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   git history / that step's commit if you need the detail): an
   incompatible `@supabase/ssr` version, and `Record<string, never>`
   being the wrong shape for "no views" in a hand-written Database type.
+- **Three more were found while adding the audit log test**, all fixed in
+  the same commit that added it:
+  1. `db/dev/0000_supabase_local_stub.sql` never granted `EXECUTE` on
+     `auth.uid()` to `authenticated` (real Supabase does, by default) —
+     every RLS policy that calls it directly rather than through a
+     `SECURITY DEFINER` wrapper (the `users` self-select policy,
+     `audit_log_insert`) silently worked in every earlier test only
+     because those tests happened to run the relevant statement before
+     switching into the `app_user` role, never actually exercising the
+     policy as a real non-superuser session. Fixed by adding the grant to
+     the stub; this cannot happen against a real Supabase project.
+  2. `db/tests/storage_rls_test.sql`'s tests 2 and 3 (expected-failure
+     inserts) were not the file's last statements, so `-v
+     ON_ERROR_STOP=1` aborted the script right there in every run —
+     meaning tests 3 through 6 were never actually executed together in
+     one pass despite the file (and this README) claiming "6/6 checks
+     pass". Fixed by wrapping the two expected-failure statements in `DO`
+     blocks that catch the specific RLS exception and continue.
+  3. A genuine bug in `recompute_project_pricing()` itself: its
+     membership check ran unconditionally, so any trigger-driven write
+     to `pricing_lines` from a session with no JWT claim set (a
+     migration, a seed script, a real `service_role` backend job) failed
+     with "not a member of this organization" even though RLS had
+     already gated whether that write was allowed to happen at all (or
+     the caller bypasses RLS by design, same as `service_role` does
+     everywhere else in this schema). `db/tests/rls_isolation_test.sql`
+     — unchanged since step 1, run again here as a regression check —
+     caught this immediately: its superuser seed insert into
+     `pricing_lines` started failing the moment 0013's trigger existed.
+     Fixed by only enforcing the check when `auth.uid()` is not null,
+     i.e. when there's an actual authenticated caller to check
+     membership against — the direct-RPC path (a client calling
+     `recompute_project_pricing` against a project it has no access to)
+     stays protected; internal trigger-driven writes from a trusted,
+     unauthenticated-context session do not.
 
 ### What's still not built
 

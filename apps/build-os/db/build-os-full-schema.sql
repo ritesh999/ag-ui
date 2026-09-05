@@ -1492,7 +1492,19 @@ begin
   if v_org_id is null then
     raise exception 'recompute_project_pricing: project % not found', p_project_id;
   end if;
-  if not app.is_org_member(v_org_id) then
+  -- Membership is checked only when there's an authenticated caller to
+  -- check it against (auth.uid() is not null) — this function is EXECUTEd
+  -- by `authenticated` for the direct-RPC path (a client could otherwise
+  -- call it against a project it has no business touching) but is ALSO
+  -- invoked internally by the pricing_lines/markup_settings triggers
+  -- below, on every write regardless of role. A trigger-driven write from
+  -- service_role, a migration, or any other session with no JWT claim set
+  -- has auth.uid() = NULL; by that point RLS has already gated whether
+  -- the write itself was allowed (or the caller bypasses RLS by design,
+  -- same as service_role does everywhere else in this schema), so
+  -- re-enforcing membership here would only break legitimate
+  -- non-interactive writes without adding real protection.
+  if auth.uid() is not null and not app.is_org_member(v_org_id) then
     raise exception 'recompute_project_pricing: not a member of this organization';
   end if;
 
