@@ -125,6 +125,123 @@ export interface Database {
         };
         Relationships: [];
       };
+      resources: {
+        Row: {
+          id: string;
+          organization_id: string;
+          resource_type:
+            | "labour"
+            | "material"
+            | "plant"
+            | "subcontractor"
+            | "overheads"
+            | "productivity"
+            | "quantity"
+            | "pricing_item"
+            | "variable";
+          description: string;
+          unit: string | null;
+          rate_or_value: number;
+          comments: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          resource_type:
+            | "labour"
+            | "material"
+            | "plant"
+            | "subcontractor"
+            | "overheads"
+            | "productivity"
+            | "quantity"
+            | "pricing_item"
+            | "variable";
+          description: string;
+          unit?: string | null;
+          rate_or_value?: number;
+          comments?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          resource_type?:
+            | "labour"
+            | "material"
+            | "plant"
+            | "subcontractor"
+            | "overheads"
+            | "productivity"
+            | "quantity"
+            | "pricing_item"
+            | "variable";
+          description?: string;
+          unit?: string | null;
+          rate_or_value?: number;
+          comments?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      assemblies: {
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          unit: string | null;
+          comments: string | null;
+          derived_rate: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          unit?: string | null;
+          comments?: string | null;
+          derived_rate?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          unit?: string | null;
+          comments?: string | null;
+          derived_rate?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      assembly_components: {
+        Row: {
+          id: string;
+          organization_id: string;
+          assembly_id: string;
+          component_resource_id: string;
+          quantity_or_formula: string;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          assembly_id: string;
+          component_resource_id: string;
+          quantity_or_formula: string;
+          sort_order?: number;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          assembly_id?: string;
+          component_resource_id?: string;
+          quantity_or_formula?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
