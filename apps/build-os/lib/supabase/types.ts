@@ -242,6 +242,57 @@ export interface Database {
         };
         Relationships: [];
       };
+      document_categories: {
+        Row: { id: string; code: string; label: string; sort_order: number };
+        Insert: { id?: string; code: string; label: string; sort_order?: number };
+        Update: { id?: string; code?: string; label?: string; sort_order?: number };
+        Relationships: [];
+      };
+      project_documents: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          category_id: string | null;
+          file_name: string;
+          file_type: "pdf" | "docx" | "xlsx";
+          size_bytes: number;
+          storage_path: string;
+          status: "processing" | "ready" | "failed";
+          status_error: string | null;
+          uploaded_by: string | null;
+          uploaded_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          category_id?: string | null;
+          file_name: string;
+          file_type: "pdf" | "docx" | "xlsx";
+          size_bytes: number;
+          storage_path: string;
+          status?: "processing" | "ready" | "failed";
+          status_error?: string | null;
+          uploaded_by?: string | null;
+          uploaded_at?: string;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          category_id?: string | null;
+          file_name?: string;
+          file_type?: "pdf" | "docx" | "xlsx";
+          size_bytes?: number;
+          storage_path?: string;
+          status?: "processing" | "ready" | "failed";
+          status_error?: string | null;
+          uploaded_by?: string | null;
+          uploaded_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -252,6 +303,17 @@ export interface Database {
       accept_pending_invites: {
         Args: Record<string, never>;
         Returns: string[]; // uuid[]
+      };
+      create_project: {
+        Args: {
+          p_organization_id: string;
+          p_name: string;
+          p_client?: string;
+          p_industry?: string;
+          p_location?: string;
+          p_project_size?: string;
+        };
+        Returns: string; // uuid
       };
     };
     Enums: { [_ in never]: never };

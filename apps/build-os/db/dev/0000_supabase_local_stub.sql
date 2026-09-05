@@ -37,3 +37,34 @@ language sql stable
 as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
+
+-- Minimal stand-in for Supabase Storage (used by 0011_storage.sql):
+-- just enough of storage.buckets/storage.objects/storage.foldername to
+-- exercise the RLS policies. Not a real implementation of Storage's
+-- upload/download HTTP API — there's nothing here to actually put bytes
+-- in, only the Postgres-level access-control surface that 0011's
+-- policies govern.
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false
+);
+
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets (id),
+  name text,
+  owner uuid,
+  created_at timestamptz not null default now(),
+  metadata jsonb
+);
+
+create or replace function storage.foldername(name text)
+returns text[]
+language sql
+immutable
+as $$
+  select (string_to_array(name, '/'))[1 : array_length(string_to_array(name, '/'), 1) - 1];
+$$;
