@@ -6,7 +6,7 @@ estimate and subcontract procurement plan out. Not a site-execution tool
 (no RFIs, submittals, or daily logs — see `apps/construction-manager` in
 this repo for that).
 
-## Status: steps 1-6 done (schema, auth/orgs, resources, projects/documents, pricing engine, WBS/procurement)
+## Status: steps 1-7 done (schema, auth/orgs, resources, projects/documents, pricing engine, WBS/procurement, workbook templates)
 
 Built in the order the build prompt specifies, each stopped and reviewed
 before moving on:
@@ -32,6 +32,12 @@ before moving on:
   the schema from step 1, with package totals read live off the linked
   pricing schedule section rather than duplicated/stored, and
   `procurement_status` changes wired into the audit log.
+- **Step 7** — workbook templates: an org-level page for building reusable
+  estimation sheets with named-reference formulas (`lib/formula-evaluator.ts`,
+  a small recursive-descent parser + dependency-graph evaluator with
+  circular-reference detection), and an "Apply Workbook" action on the
+  Estimate tab that generates a new pricing schedule section from a
+  template's rows.
 
 ```
 app/               Next.js App Router pages
@@ -44,7 +50,8 @@ db/
   dev/             a local-only stand-in for Supabase's auth + storage schemas/roles
   tests/           scripted RLS + RPC + pricing-engine tests (actually run — see below)
   SCHEMA_REVIEW.md  step 1's review doc
-scripts/           verify-pricing-engine-parity.mjs — the JS-vs-SQL parity check
+scripts/           verify-pricing-engine-parity.mjs (JS-vs-SQL parity),
+                    verify-formula-evaluator.mjs (workbook formula unit tests)
 STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 ```
 
@@ -145,6 +152,55 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   error code `23505` and turn it into a field-level message rather than
   a raw constraint-violation string.
 
+### Step 7 specifics worth knowing
+
+- **The formula evaluator is a TypeScript module, not a Postgres
+  function** — a deliberate departure from the pricing engine's (step 5)
+  architecture, explained in `lib/formula-evaluator.ts`'s own header:
+  `pricing_lines` has (and will keep gaining) multiple write paths, which
+  is why it needed DB-level triggers no caller could forget to invoke;
+  `workbook_rows` has exactly one write path today (this feature's own
+  Server Actions), so a plain function called explicitly after every
+  mutation still satisfies "server-side computation" (spec 8 — it runs
+  only in a Server Action, never in the browser) without building
+  trigger plumbing for a single call site.
+- **Formula grammar**: standard arithmetic (`+ - * / ()`, unary minus,
+  decimal numbers) plus named references, resolved by longest-match
+  against every other row's `description` in the same template AND every
+  org resource's `description` — so a multi-word name like "Concrete
+  Volume" is matched as one token, and a name with no matching row falls
+  back to a resource's `rate_or_value`, matching spec 4's "referencing
+  other rows and resources by name" exactly. Row names win over resource
+  names on a collision (more likely the intended target within a sheet
+  someone is actively editing).
+- **A row's evaluated quantity and its final total are exposed
+  separately** (`EvaluatedRow.quantity` vs `.computed_total`) —
+  needed for "apply this workbook to a project" (`applyWorkbookToProject`
+  in the Estimate tab's actions), which must populate `pricing_lines.quantity`
+  and `.rate` as two separate numbers, not one pre-multiplied total.
+- **Circular references are caught by a 3-color DFS** over the
+  row-dependency graph (unvisited/visiting/done) — a reference back to a
+  row currently "visiting" is a cycle. Every row in (or depending on) a
+  cycle gets `computed_total = null` and a specific error message,
+  without crashing or looping the rest of the sheet's rows, which still
+  compute normally.
+- **"Apply Workbook" re-evaluates fresh at apply time** rather than
+  trusting whatever `computed_total` the template's own page last
+  persisted (which could be stale if a referenced org resource's rate
+  changed since), and refuses to apply anything if any row has an
+  unresolved formula — a partially-applied estimate with silently-missing
+  lines would be worse than making the user fix the template first. Only
+  rows with both an evaluated quantity and a rate become a priced line
+  (`WB.1`, `WB.2`, ...); a pure input-constant row (referenced by other
+  formulas but with nothing of its own to price) is correctly skipped.
+- **No `workbook_applications` table** — per `db/SCHEMA_REVIEW.md`'s own
+  note, flagged as optional ("if you want an audit trail of which
+  workbook produced which lines") rather than something to confirm
+  before proceeding, unlike the audit-log and pricing-formula questions.
+  Not built; the new pricing lines carry no back-reference to the
+  template that generated them beyond being grouped under a section
+  named after it.
+
 ### What step 2 decided (all confirmed, all built accordingly)
 
 - **Invite flow**: pending membership by email, no account created until
@@ -213,14 +269,33 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   the "package total" a client would compute (summing a linked section's
   direct-line `sell_price`) matches what the pricing engine actually
   wrote for that section.
+- `scripts/verify-formula-evaluator.mjs`: 11 hand-calculated checks
+  against `lib/formula-evaluator.ts` directly (no DB involved — see that
+  file's header for why there's no SQL counterpart to cross-check
+  against, unlike the pricing engine's parity script) — multi-word named
+  references, a no-formula row exposing its rate as a constant, resource
+  fallback when no row matches a name, a circular reference caught
+  without crashing, an unknown reference producing a per-row error
+  without affecting unrelated rows, heading rows passing through
+  untouched, operator precedence/parentheses/unary minus, and a 3-level
+  transitive dependency chain resolving in the right order. All 11 pass.
+- `db/tests/workbook_test.sql`: workbook_templates/workbook_rows can be
+  created and read back under RLS; simulating exactly what
+  `applyWorkbookToProject` does (inserting a pricing_section + a `WB.1`
+  pricing_line with the quantity/rate the evaluator would have produced
+  for the brief's own "Concrete Volume × Reinforcement Ratio" example)
+  confirms the pricing engine trigger (step 5) picks up a workbook-applied
+  line exactly like a manually-entered one — line_total and sell_price
+  compute correctly with no special-casing needed. 2/2 scenarios pass.
 - All of the above were run against a real local Postgres 16 with a
   stubbed `auth`/`storage` schema (no live Supabase project or Docker
   daemon available in this environment — flagged, not skipped silently).
-  Neither the Pricing Schedule nor the Subcontractors UI could be
-  exercised in a live browser for the same reason (no Supabase project
-  to sign into) — both are validated by the production build's
-  type-check plus the DB tests above, not by clicking through them, and
-  that gap is flagged rather than silently claimed as tested.
+  Neither the Pricing Schedule, the Subcontractors, nor the Workbook
+  Templates UI could be exercised in a live browser for the same reason
+  (no Supabase project to sign into) — each is validated by the
+  production build's type-check plus the DB/unit tests above, not by
+  clicking through it, and that gap is flagged rather than silently
+  claimed as tested.
 - `npm run build` (full production build, type-checking included) passes
   clean after every step, including this one.
 - Two real bugs were found and fixed getting step 2's build green (see
@@ -265,5 +340,5 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 
 ### What's still not built
 
-Workbook templates + formula evaluator (step 7), and AI integration +
-product tours (step 8) — unchanged from the build prompt's order.
+AI integration + product tours (step 8) — unchanged from the build
+prompt's order.

@@ -1,14 +1,16 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, FileSpreadsheet } from "lucide-react";
 import { Button, Card } from "@/components/ui";
 import type { PricingLineRow, PricingSectionRow, MarkupSettingsRow } from "./types";
 import { deletePricingSection, deletePricingLine, movePricingLine } from "./actions";
 import { AddSectionModal } from "./AddSectionModal";
 import { LineModal } from "./LineModal";
 import { MarkupPanel } from "./MarkupPanel";
+import { ApplyWorkbookModal } from "./ApplyWorkbookModal";
 import { formatMoney } from "./format";
+import type { WorkbookTemplateOption } from "./EstimateExplorer";
 
 export function PricingScheduleTab({
   organizationId,
@@ -16,16 +18,19 @@ export function PricingScheduleTab({
   sections,
   lines,
   markup,
+  workbookTemplates,
 }: {
   organizationId: string;
   projectId: string;
   sections: PricingSectionRow[];
   lines: PricingLineRow[];
   markup: MarkupSettingsRow | null;
+  workbookTemplates: WorkbookTemplateOption[];
 }) {
   const [addSectionOpen, setAddSectionOpen] = useState(false);
   const [lineModalOpen, setLineModalOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<PricingLineRow | null>(null);
+  const [applyWorkbookOpen, setApplyWorkbookOpen] = useState(false);
 
   const directLinesBySection = useMemo(() => {
     const map = new Map<string, PricingLineRow[]>();
@@ -126,6 +131,10 @@ export function PricingScheduleTab({
           <Button onClick={openAddLine}>
             <Plus className="mr-1.5 h-4 w-4" />
             Add Line
+          </Button>
+          <Button variant="outline" onClick={() => setApplyWorkbookOpen(true)}>
+            <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+            Apply Workbook
           </Button>
         </div>
 
@@ -239,6 +248,13 @@ export function PricingScheduleTab({
         editingLine={editingLine}
         open={lineModalOpen}
         onClose={() => setLineModalOpen(false)}
+      />
+      <ApplyWorkbookModal
+        organizationId={organizationId}
+        projectId={projectId}
+        workbookTemplates={workbookTemplates}
+        open={applyWorkbookOpen}
+        onClose={() => setApplyWorkbookOpen(false)}
       />
     </div>
   );

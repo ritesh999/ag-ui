@@ -22,6 +22,11 @@ export interface ProjectAssemblyRow {
   derived_rate: number | null;
 }
 
+export interface WorkbookTemplateOption {
+  id: string;
+  name: string;
+}
+
 export function EstimateExplorer({
   organizationId,
   projectId,
@@ -30,6 +35,7 @@ export function EstimateExplorer({
   markup,
   resources,
   assemblies,
+  workbookTemplates,
 }: {
   organizationId: string;
   projectId: string;
@@ -38,6 +44,7 @@ export function EstimateExplorer({
   markup: MarkupSettingsRow | null;
   resources: ProjectResourceRow[];
   assemblies: ProjectAssemblyRow[];
+  workbookTemplates: WorkbookTemplateOption[];
 }) {
   const [tab, setTab] = useState<"schedule" | "resources">("schedule");
 
@@ -65,6 +72,7 @@ export function EstimateExplorer({
           sections={sections}
           lines={lines}
           markup={markup}
+          workbookTemplates={workbookTemplates}
         />
       ) : (
         <ProjectResourcesTab projectId={projectId} resources={resources} assemblies={assemblies} />

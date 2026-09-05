@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Database, FolderOpen, UserPlus } from "lucide-react";
+import { Building2, Database, FileSpreadsheet, FolderOpen, UserPlus } from "lucide-react";
 import clsx from "clsx";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { signOut } from "@/app/(app)/actions";
@@ -11,6 +11,7 @@ import type { UserOrganization } from "@/lib/current-org";
 const navItems = [
   { href: "/projects", label: "Projects", icon: FolderOpen },
   { href: "/resources", label: "Resources", icon: Database },
+  { href: "/workbook-templates", label: "Workbook Templates", icon: FileSpreadsheet },
 ];
 
 export function Sidebar({

@@ -12,7 +12,7 @@ export default async function EstimatePage({ params }: { params: { id: string } 
 
   if (!project) return null;
 
-  const [sectionsRes, linesRes, markupRes, resourcesRes, assembliesRes] = await Promise.all([
+  const [sectionsRes, linesRes, markupRes, resourcesRes, assembliesRes, workbookTemplatesRes] = await Promise.all([
     supabase
       .from("pricing_sections")
       .select("id, name, sort_order")
@@ -44,6 +44,12 @@ export default async function EstimatePage({ params }: { params: { id: string } 
       .eq("project_id", params.id)
       .is("deleted_at", null)
       .order("name"),
+    supabase
+      .from("workbook_templates")
+      .select("id, name")
+      .eq("organization_id", project.organization_id)
+      .is("deleted_at", null)
+      .order("name"),
   ]);
 
   return (
@@ -55,6 +61,7 @@ export default async function EstimatePage({ params }: { params: { id: string } 
       markup={markupRes.data ?? null}
       resources={resourcesRes.data ?? []}
       assemblies={assembliesRes.data ?? []}
+      workbookTemplates={workbookTemplatesRes.data ?? []}
     />
   );
 }

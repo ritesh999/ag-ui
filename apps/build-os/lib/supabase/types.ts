@@ -410,6 +410,78 @@ export interface Database {
         };
         Relationships: [];
       };
+      workbook_templates: {
+        Row: {
+          id: string;
+          organization_id: string;
+          name: string;
+          description: string | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          name: string;
+          description?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          name?: string;
+          description?: string | null;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      workbook_rows: {
+        Row: {
+          id: string;
+          organization_id: string;
+          workbook_template_id: string;
+          row_type: "heading" | "resource";
+          resource_id: string | null;
+          description: string;
+          unit: string | null;
+          rate: number | null;
+          qty_formula: string | null;
+          computed_total: number | null;
+          notes: string | null;
+          sort_order: number;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          workbook_template_id: string;
+          row_type?: "heading" | "resource";
+          resource_id?: string | null;
+          description?: string;
+          unit?: string | null;
+          rate?: number | null;
+          qty_formula?: string | null;
+          computed_total?: number | null;
+          notes?: string | null;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          workbook_template_id?: string;
+          row_type?: "heading" | "resource";
+          resource_id?: string | null;
+          description?: string;
+          unit?: string | null;
+          rate?: number | null;
+          qty_formula?: string | null;
+          computed_total?: number | null;
+          notes?: string | null;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
       document_categories: {
         Row: { id: string; code: string; label: string; sort_order: number };
         Insert: { id?: string; code: string; label: string; sort_order?: number };
