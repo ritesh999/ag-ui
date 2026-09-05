@@ -6,6 +6,22 @@
 -- for the 0001-0009 migrations to apply cleanly against a plain local
 -- Postgres and for the RLS tests in ../tests/ to run.
 
+-- Supabase provisions these roles on every project (anon/authenticated
+-- are what PostgREST assumes when granting access to RPC functions etc).
+-- service_role is included for completeness though nothing here uses it.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin bypassrls;
+  end if;
+end $$;
+
 create schema if not exists auth;
 
 create table if not exists auth.users (

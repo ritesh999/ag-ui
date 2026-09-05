@@ -23,13 +23,13 @@ grant select, insert, update, delete on all tables in schema public to app_user;
 grant execute on all functions in schema app to app_user;
 
 -- --- Seed as the invoking (superuser/owner) role, bypasses RLS --------
+-- Inserting into auth.users fires the on_auth_user_created trigger
+-- (migration 0010), which creates the matching public.users row itself —
+-- no separate insert into `users` needed (and doing one would now
+-- conflict on the primary key).
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'alice@acme.test'),
   ('22222222-2222-2222-2222-222222222222', 'bob@beta.test');
-
-insert into users (id, email, full_name) values
-  ('11111111-1111-1111-1111-111111111111', 'alice@acme.test', 'Alice'),
-  ('22222222-2222-2222-2222-222222222222', 'bob@beta.test', 'Bob');
 
 insert into organizations (id, name) values
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme Construction'),

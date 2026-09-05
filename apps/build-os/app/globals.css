@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/*
+ * Tokens per DESIGN.md, with the one deliberate override from
+ * buildosprompt.md section 7: Google blue as the primary accent instead
+ * of DESIGN.md's black-fill buttons. Everything else stays achromatic —
+ * see that section before adding any new color anywhere in this app.
+ */
+@theme {
+  /* --- Achromatic base (DESIGN.md) --- */
+  --color-canvas: #f5f5f5;
+  --color-paper: #ffffff;
+  --color-surface-alt: #fafafa;
+  --color-ink: #0a0a0a;
+  --color-ink-soft: #171717;
+  --color-mid-gray: #737373;
+  --color-hairline: #e5e5e5;
+
+  /* --- Google blue accent override (buildosprompt.md section 7) --- */
+  --color-primary: #1a73e8;
+  --color-primary-hover: #174ea6;
+  --color-primary-light: #4285f4;
+  --color-primary-tint: #e8f0fe;
+  --color-destructive: #e7000b;
+
+  /* --- Typography --- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --text-caption: 12px;
+  --text-body: 14px;
+  --text-body-lg: 16px;
+  --text-subheading: 18px;
+  --text-heading-sm: 24px;
+  --text-heading: 30px;
+  --text-heading-lg: 36px;
+  --text-display: 48px;
+
+  /* --- Radii --- */
+  --radius-small: 6px;
+  --radius-nested: 10px;
+  --radius-badges: 18px;
+  --radius-inputs: 18px;
+  --radius-buttons: 18px;
+  --radius-cards: 24px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.43;
+}
+
+* {
+  border-color: var(--color-hairline);
+}
+
+.shadow-card {
+  box-shadow:
+    0 0 0 1px rgba(23, 23, 23, 0.05),
+    0 1px 3px rgba(0, 0, 0, 0.1),
+    0 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
