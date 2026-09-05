@@ -461,6 +461,78 @@ export interface Database {
         };
         Relationships: [];
       };
+      wbs_sections: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          name: string;
+          sort_order: number;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          name: string;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          name?: string;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      wbs_packages: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          section_id: string;
+          name: string;
+          description: string | null;
+          package_code: string;
+          delivery_method: "self_perform" | "subcontract";
+          procurement_status: "not_applicable" | "draft" | "issued" | "quotes_received" | "preferred" | "awarded";
+          pricing_section_id: string | null;
+          sort_order: number;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          section_id: string;
+          name: string;
+          description?: string | null;
+          package_code: string;
+          delivery_method?: "self_perform" | "subcontract";
+          procurement_status?: "not_applicable" | "draft" | "issued" | "quotes_received" | "preferred" | "awarded";
+          pricing_section_id?: string | null;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          section_id?: string;
+          name?: string;
+          description?: string | null;
+          package_code?: string;
+          delivery_method?: "self_perform" | "subcontract";
+          procurement_status?: "not_applicable" | "draft" | "issued" | "quotes_received" | "preferred" | "awarded";
+          pricing_section_id?: string | null;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
       pricing_sections: {
         Row: {
           id: string;

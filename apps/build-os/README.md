@@ -6,7 +6,7 @@ estimate and subcontract procurement plan out. Not a site-execution tool
 (no RFIs, submittals, or daily logs — see `apps/construction-manager` in
 this repo for that).
 
-## Status: steps 1-5 done (schema, auth/orgs, resources, projects/documents, pricing engine)
+## Status: steps 1-6 done (schema, auth/orgs, resources, projects/documents, pricing engine, WBS/procurement)
 
 Built in the order the build prompt specifies, each stopped and reviewed
 before moving on:
@@ -27,6 +27,11 @@ before moving on:
   mirror for an instant preview, and the Pricing Schedule UI (Estimate
   tab: sections, direct/indirect bands, markup panel, grand total,
   add/edit/delete/reorder) plus a read-mostly Project Resources sub-tab.
+- **Step 6** — the WBS/procurement UI (Subcontractors tab): sections and
+  packages (package code, delivery method, procurement status) on top of
+  the schema from step 1, with package totals read live off the linked
+  pricing schedule section rather than duplicated/stored, and
+  `procurement_status` changes wired into the audit log.
 
 ```
 app/               Next.js App Router pages
@@ -115,6 +120,31 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   edits, `logRowEvent` for whole-row inserts/deletes) is now called from
   `updatePricingLine`, `deletePricingLine`, and `updateMarkupSettings`.
 
+### Step 6 specifics worth knowing
+
+- **The WBS schema hasn't changed since step 1** (`0005_wbs.sql`) — this
+  step is UI-only, same as step 5 built entirely on top of `0004_pricing.sql`.
+- **A package total is computed, not stored**: `wbs_packages.pricing_section_id`
+  is an optional link to a pricing schedule section (spec 2.2: "package
+  totals link to pricing-schedule sections so a total can be read off the
+  estimate"), and the Subcontractors page sums that section's direct
+  lines' `sell_price` at request time — the same number the pricing
+  engine already computed, read fresh, never duplicated into a second
+  column that could drift out of sync.
+- **Deleting a WBS section cascades to its packages** — unlike deleting a
+  *pricing* section, which only detaches its lines (`section_id` set
+  null). The schema itself draws this distinction (`wbs_packages.section_id`
+  is `NOT NULL ... ON DELETE CASCADE`, `pricing_lines.section_id` is
+  nullable with `ON DELETE SET NULL`): a WBS package doesn't make sense
+  without its section, but a priced line still represents real cost with
+  or without a heading over it. The delete confirmation names the count
+  of packages that will go with it.
+- **Package codes are unique per project, enforced at the DB layer**
+  (`wbs_packages_code_unique_per_project`, a partial unique index over
+  non-deleted rows) — `addWbsPackage`/`updateWbsPackage` catch Postgres
+  error code `23505` and turn it into a field-level message rather than
+  a raw constraint-violation string.
+
 ### What step 2 decided (all confirmed, all built accordingly)
 
 - **Invite flow**: pending membership by email, no account created until
@@ -176,14 +206,21 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   shapes `lib/audit-log.ts` sends (a field-level update row, a whole-row
   delete row) and rejects an authenticated user attributing a change to
   someone else's `actor_user_id`. 3/3 scenarios pass.
+- `db/tests/wbs_test.sql`: a package can link to a pricing section; the
+  `wbs_packages_code_unique_per_project` constraint rejects a duplicate
+  code within the same project; deleting a WBS section cascades to
+  delete its packages. 3/3 scenarios pass, plus a direct SQL check that
+  the "package total" a client would compute (summing a linked section's
+  direct-line `sell_price`) matches what the pricing engine actually
+  wrote for that section.
 - All of the above were run against a real local Postgres 16 with a
   stubbed `auth`/`storage` schema (no live Supabase project or Docker
   daemon available in this environment — flagged, not skipped silently).
-  The Pricing Schedule UI itself could not be exercised in a live
-  browser for the same reason (no Supabase project to sign into) — it's
-  validated by the production build's type-check plus the DB/parity
-  tests above, not by clicking through it, and that gap is flagged
-  rather than silently claimed as tested.
+  Neither the Pricing Schedule nor the Subcontractors UI could be
+  exercised in a live browser for the same reason (no Supabase project
+  to sign into) — both are validated by the production build's
+  type-check plus the DB tests above, not by clicking through them, and
+  that gap is flagged rather than silently claimed as tested.
 - `npm run build` (full production build, type-checking included) passes
   clean after every step, including this one.
 - Two real bugs were found and fixed getting step 2's build green (see
@@ -228,6 +265,5 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 
 ### What's still not built
 
-WBS/procurement (step 6), workbook templates + formula evaluator (step
-7), and AI integration + product tours (step 8) — unchanged from the
-build prompt's order.
+Workbook templates + formula evaluator (step 7), and AI integration +
+product tours (step 8) — unchanged from the build prompt's order.
