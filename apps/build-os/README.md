@@ -6,7 +6,7 @@ estimate and subcontract procurement plan out. Not a site-execution tool
 (no RFIs, submittals, or daily logs — see `apps/construction-manager` in
 this repo for that).
 
-## Status: steps 1-4 done (schema, auth/orgs, resources, projects/documents)
+## Status: steps 1-5 done (schema, auth/orgs, resources, projects/documents, pricing engine)
 
 Built in the order the build prompt specifies, each stopped and reviewed
 before moving on:
@@ -21,17 +21,25 @@ before moving on:
 - **Step 4** — project creation (with resource-library copy-by-value),
   the project detail shell (3 tabs), and real document upload/download/
   delete via Supabase Storage with per-org, per-project RLS.
+- **Step 5** — the pricing engine: a Postgres function + triggers that
+  recompute every pricing line's cost/absorbed-indirect/sell-price
+  reactively on any quantity, rate, or markup change, a client-side
+  mirror for an instant preview, and the Pricing Schedule UI (Estimate
+  tab: sections, direct/indirect bands, markup panel, grand total,
+  add/edit/delete/reorder) plus a read-mostly Project Resources sub-tab.
 
 ```
 app/               Next.js App Router pages
 components/        Sidebar, org switcher, Modal, and small UI primitives (DESIGN.md tokens)
-lib/               Supabase client/server glue, current-org resolution, auth bootstrap, resource constants
+lib/               Supabase client/server glue, current-org resolution, auth bootstrap,
+                    resource constants, pricing-engine.ts (client preview mirror)
 middleware.ts      Session refresh + route protection
 db/
-  migrations/      12 SQL files, apply in order 0001 -> 0012
+  migrations/      13 SQL files, apply in order 0001 -> 0013
   dev/             a local-only stand-in for Supabase's auth + storage schemas/roles
-  tests/           scripted RLS + RPC tests (actually run — see below)
+  tests/           scripted RLS + RPC + pricing-engine tests (actually run — see below)
   SCHEMA_REVIEW.md  step 1's review doc
+scripts/           verify-pricing-engine-parity.mjs — the JS-vs-SQL parity check
 STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 ```
 
@@ -53,10 +61,51 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 - **Document status is always `ready` on upload** — there's no async
   processing to report `processing` for yet. That state starts meaning
   something once step 8's AI classification exists.
-- **The Subcontractors and Estimate tabs exist but say so plainly**: the
-  3-tab shell is step 4's own deliverable per the brief, but their actual
-  content (WBS/procurement, pricing schedule) is steps 5-6 — each tab
-  says exactly that rather than showing a fake or broken screen.
+- **The Subcontractors tab exists but says so plainly**: the 3-tab shell
+  is step 4's own deliverable per the brief, but its actual content
+  (WBS/procurement) is step 6 — it says exactly that rather than showing
+  a fake or broken screen.
+
+### Step 5 specifics worth knowing
+
+- **The pricing engine lives in the database, not the app** (spec 8:
+  "server-side computation for all totals"). `recompute_project_pricing()`
+  (`0013_pricing_engine.sql`) recomputes every direct line's
+  `line_total` / `absorbed_indirect` / `sell_price` for a project in one
+  set-based statement, then triggers fire it automatically on any
+  `pricing_lines` insert/delete/update-of-`quantity`/`rate`/`cost_type`/
+  `section_id`/`deleted_at`, or `markup_settings` change — no code path
+  (the UI today, CSV import or the workbook-apply-to-project action
+  later) can add or edit a line without the totals staying correct.
+- **Compounding vs. additive markup, resolved with evidence, not a guess**:
+  the brief's own build order asked to confirm this before coding
+  (`SCHEMA_REVIEW.md` section 2) but two review checkpoints passed
+  without an answer. The reference screenshots' own numbers settle it —
+  a $254,900 cost becoming a $291,701.12 sell price is a ×1.1444
+  multiplier, which is 1.10 × 1.02 × 1.02 (compounding) to 4 significant
+  figures, not the ×1.14 an additive uplift would give. Compounding is
+  now the default; `markup_settings.formula_mode` stays a per-project
+  override in case a specific project needs additive instead.
+- **The UPDATE OF column lists on the triggers are load-bearing**: they
+  list every column a real edit touches but deliberately exclude
+  `line_total`/`absorbed_indirect`/`sell_price`/`updated_at` — the exact
+  columns the recompute function itself writes — so its own writes don't
+  re-fire the trigger. Adding one of those three to the list (or removing
+  a real one) either infinite-loops or silently stops reacting to edits.
+- **`lib/pricing-engine.ts` is a preview, never a source of truth**: it
+  mirrors the SQL formula exactly so the Markup panel can show an instant
+  "what would this total become" figure while the user is still typing,
+  before the Save round-trip lands. `scripts/verify-pricing-engine-parity.mjs`
+  proves the two never disagree by computing the same 5 fixtures (normal
+  split, additive mode, a repeating-decimal 1/3-2/3 share, zero direct
+  total, and no markup_settings row at all) through both the JS function
+  and a real Postgres `recompute_project_pricing()` call, and diffing
+  every line. Every *persisted* number is still written by the database
+  function alone.
+- **Reorder is up/down, not drag-and-drop** — the brief's approved stack
+  doesn't include a DnD library, and swapping `sort_order` with the
+  adjacent sibling (within the same section, or the whole indirect band)
+  covers the same requirement without adding one.
 
 ### What step 2 decided (all confirmed, all built accordingly)
 
@@ -78,7 +127,7 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 1. Copy `.env.local.example` to `.env.local` and fill in your Supabase
    project's URL + anon key (Settings -> API).
 2. Run the migrations against that project — `db/build-os-full-schema.sql`
-   or `db/migrations/0001` through `0012` in order, via the SQL Editor or
+   or `db/migrations/0001` through `0013` in order, via the SQL Editor or
    `psql`. If you already ran an earlier version of the combined file,
    you only need whatever new `NNNN_*.sql` files you haven't applied yet
    — everything here uses `create or replace` / `if not exists` /
@@ -104,9 +153,25 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   components at the copies, and — the actual point of "copied by
   value" — editing the org-level resource afterward does **not** change
   the number already committed to the project. 5/5 checks pass.
+- `db/tests/pricing_engine_test.sql`: hand-calculated fixtures (a 10/5/1
+  quantity split with a 10%/2%/2% compounding markup) confirm the exact
+  cost/absorbed-indirect/sell-price numbers; reactively editing a line's
+  quantity and switching `formula_mode` to additive both recompute with
+  no explicit call; deleting every direct line leaves indirect lines
+  priced at zero share with no divide-by-zero error; a non-member is
+  rejected by the function's own authorization check. 6/6 scenarios pass.
+- `scripts/verify-pricing-engine-parity.mjs`: `lib/pricing-engine.ts` and
+  `recompute_project_pricing()` produce identical numbers (to floating-
+  point precision) across 5 fixtures / 12 lines, including a repeating-
+  decimal share and the zero-direct-total edge case. All match exactly.
 - All of the above were run against a real local Postgres 16 with a
   stubbed `auth`/`storage` schema (no live Supabase project or Docker
   daemon available in this environment — flagged, not skipped silently).
+  The Pricing Schedule UI itself could not be exercised in a live
+  browser for the same reason (no Supabase project to sign into) — it's
+  validated by the production build's type-check plus the DB/parity
+  tests above, not by clicking through it, and that gap is flagged
+  rather than silently claimed as tested.
 - `npm run build` (full production build, type-checking included) passes
   clean after every step, including this one.
 - Two real bugs were found and fixed getting step 2's build green (see
@@ -116,6 +181,6 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 
 ### What's still not built
 
-Pricing schedule + the pricing engine (step 5), WBS/procurement (step
-6), workbook templates + formula evaluator (step 7), and AI integration
-+ product tours (step 8) — unchanged from the build prompt's order.
+WBS/procurement (step 6), workbook templates + formula evaluator (step
+7), and AI integration + product tours (step 8) — unchanged from the
+build prompt's order.

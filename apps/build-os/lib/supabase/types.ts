@@ -242,6 +242,135 @@ export interface Database {
         };
         Relationships: [];
       };
+      project_resources: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          source_resource_id: string | null;
+          resource_type:
+            | "labour"
+            | "material"
+            | "plant"
+            | "subcontractor"
+            | "overheads"
+            | "productivity"
+            | "quantity"
+            | "pricing_item"
+            | "variable";
+          description: string;
+          unit: string | null;
+          rate_or_value: number;
+          comments: string | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          source_resource_id?: string | null;
+          resource_type:
+            | "labour"
+            | "material"
+            | "plant"
+            | "subcontractor"
+            | "overheads"
+            | "productivity"
+            | "quantity"
+            | "pricing_item"
+            | "variable";
+          description: string;
+          unit?: string | null;
+          rate_or_value?: number;
+          comments?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          source_resource_id?: string | null;
+          resource_type?:
+            | "labour"
+            | "material"
+            | "plant"
+            | "subcontractor"
+            | "overheads"
+            | "productivity"
+            | "quantity"
+            | "pricing_item"
+            | "variable";
+          description?: string;
+          unit?: string | null;
+          rate_or_value?: number;
+          comments?: string | null;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      project_assemblies: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          source_assembly_id: string | null;
+          name: string;
+          unit: string | null;
+          comments: string | null;
+          derived_rate: number | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          source_assembly_id?: string | null;
+          name: string;
+          unit?: string | null;
+          comments?: string | null;
+          derived_rate?: number | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          source_assembly_id?: string | null;
+          name?: string;
+          unit?: string | null;
+          comments?: string | null;
+          derived_rate?: number | null;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      project_assembly_components: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_assembly_id: string;
+          component_project_resource_id: string;
+          quantity_or_formula: string;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_assembly_id: string;
+          component_project_resource_id: string;
+          quantity_or_formula: string;
+          sort_order?: number;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_assembly_id?: string;
+          component_project_resource_id?: string;
+          quantity_or_formula?: string;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
       document_categories: {
         Row: { id: string; code: string; label: string; sort_order: number };
         Insert: { id?: string; code: string; label: string; sort_order?: number };
@@ -293,6 +422,129 @@ export interface Database {
         };
         Relationships: [];
       };
+      pricing_sections: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          cost_type: "direct" | "indirect";
+          name: string;
+          sort_order: number;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          cost_type?: "direct" | "indirect";
+          name: string;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          cost_type?: "direct" | "indirect";
+          name?: string;
+          sort_order?: number;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      pricing_lines: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          section_id: string | null;
+          cost_type: "direct" | "indirect";
+          item_code: string;
+          description: string;
+          quantity: number;
+          unit: string | null;
+          rate: number;
+          line_total: number;
+          absorbed_indirect: number;
+          sell_price: number | null;
+          sort_order: number;
+          is_ai_generated: boolean;
+          ai_confirmed_at: string | null;
+          created_by: string | null;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          section_id?: string | null;
+          cost_type: "direct" | "indirect";
+          item_code: string;
+          description?: string;
+          quantity?: number;
+          unit?: string | null;
+          rate?: number;
+          line_total?: number;
+          absorbed_indirect?: number;
+          sell_price?: number | null;
+          sort_order?: number;
+          is_ai_generated?: boolean;
+          ai_confirmed_at?: string | null;
+          created_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          section_id?: string | null;
+          cost_type?: "direct" | "indirect";
+          item_code?: string;
+          description?: string;
+          quantity?: number;
+          unit?: string | null;
+          rate?: number;
+          line_total?: number;
+          absorbed_indirect?: number;
+          sell_price?: number | null;
+          sort_order?: number;
+          is_ai_generated?: boolean;
+          ai_confirmed_at?: string | null;
+          created_by?: string | null;
+          deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      markup_settings: {
+        Row: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          margin_pct: number;
+          risk_pct: number;
+          corporate_overheads_pct: number;
+          formula_mode: "compounding" | "additive";
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          project_id: string;
+          margin_pct?: number;
+          risk_pct?: number;
+          corporate_overheads_pct?: number;
+          formula_mode?: "compounding" | "additive";
+        };
+        Update: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          margin_pct?: number;
+          risk_pct?: number;
+          corporate_overheads_pct?: number;
+          formula_mode?: "compounding" | "additive";
+        };
+        Relationships: [];
+      };
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -314,6 +566,10 @@ export interface Database {
           p_project_size?: string;
         };
         Returns: string; // uuid
+      };
+      recompute_project_pricing: {
+        Args: { p_project_id: string };
+        Returns: undefined;
       };
     };
     Enums: { [_ in never]: never };
