@@ -42,7 +42,8 @@ jobs:
       - name: Build static export
         run: npm run build
         env:
-          GITHUB_PAGES_BUILD: "true"
+          STATIC_EXPORT: "true"
+          GH_PAGES_BASE_PATH: "true"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

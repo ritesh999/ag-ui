@@ -29,32 +29,45 @@ Then open http://localhost:3000.
 
 ## Deployment
 
-This app is deployed to GitHub Pages via
-[`.github/workflows/deploy-construction-manager.yml`](../../.github/workflows/deploy-construction-manager.yml),
-which builds a static export (`next build` with `output: "export"`, gated
-behind the `GITHUB_PAGES_BUILD=true` env var so local dev/build are
-unaffected) and publishes it with `actions/deploy-pages`. It runs
-automatically on every push to `main` or this feature branch that touches
-`apps/construction-manager/**`.
+The app builds to a fully static export (`next build` with
+`output: "export"`) since there's no "create project" flow — every route is
+known at build time (see "Notes on scope" below) — so it needs no server at
+all. Two static-export env vars in `next.config.js` control this, both
+off by default so local `npm run dev` / `npm run build` are unaffected:
 
-Since there's no "create project" flow (see below), every route the app can
-navigate to is known at build time, so the whole thing is static — no
-server, and no Vercel/Netlify account needed. RFIs, submittals, tasks, and
-daily logs you create still work on the static build; they're stored in
-your browser's `localStorage`, same as in dev.
+- `STATIC_EXPORT=true` — turns on `output: "export"` (used by every static
+  host).
+- `GH_PAGES_BASE_PATH=true` — additionally sets `basePath: "/ag-ui"`, needed
+  **only** for GitHub Pages project sites (`<user>.github.io/<repo>/`).
+  Netlify and other hosts that serve from the domain root must leave this
+  off.
 
-**One-time setup required** (this repository's GitHub Pages hasn't been
-turned on yet, and CI tooling in this environment can't flip repo settings
-on your behalf): go to **Settings → Pages** in the `ritesh999/ag-ui` repo
-and set **Build and deployment → Source** to **GitHub Actions**. After that,
-every push re-deploys automatically and the app is live at
+**GitHub Pages** — [`.github/workflows/deploy-construction-manager.yml`](../../.github/workflows/deploy-construction-manager.yml)
+builds with both env vars set and publishes via `actions/deploy-pages` on
+every push to `main` or this branch that touches `apps/construction-manager/**`.
+One-time setup this repo still needs (I don't have admin/API access to do
+it myself): **Settings → Pages → Build and deployment → Source: GitHub
+Actions** in `ritesh999/ag-ui`. After that it's live at
 `https://ritesh999.github.io/ag-ui/`.
+
+**Netlify** — [`netlify.toml`](../../netlify.toml) at the repo root is
+ready to go: base directory `apps/construction-manager`, build command
+`npm run build`, publish directory `apps/construction-manager/out`, and
+`STATIC_EXPORT=true` set for you. I don't have Netlify credentials in this
+environment, so I can't trigger the deploy myself — connect the repo in the
+Netlify UI ("Add new site" → "Import an existing project" → pick
+`ritesh999/ag-ui`) and it'll build correctly with zero extra configuration,
+or run `netlify deploy --prod` from a machine that has the Netlify CLI
+logged in. Either way you don't need to touch build settings; `netlify.toml`
+already has them.
 
 To build the static export locally (e.g. to sanity-check it):
 
 ```bash
 cd apps/construction-manager
-GITHUB_PAGES_BUILD=true npm run build
+STATIC_EXPORT=true npm run build            # Netlify-style, served from "/"
+# or, to also test the GitHub Pages basePath:
+STATIC_EXPORT=true GH_PAGES_BASE_PATH=true npm run build
 npx serve out   # or any static file server
 ```
 

@@ -1,0 +1,12 @@
+[build]
+  base = "apps/construction-manager"
+  command = "npm run build"
+  publish = "apps/construction-manager/out"
+
+[build.environment]
+  STATIC_EXPORT = "true"
+
+[[redirects]]
+  from = "/*"
+  to = "/404.html"
+  status = 404
