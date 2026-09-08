@@ -27,6 +27,12 @@ export interface WorkbookTemplateOption {
   name: string;
 }
 
+export interface ProjectDocumentOption {
+  id: string;
+  file_name: string;
+  file_type: "pdf" | "docx" | "xlsx";
+}
+
 export function EstimateExplorer({
   organizationId,
   projectId,
@@ -36,6 +42,7 @@ export function EstimateExplorer({
   resources,
   assemblies,
   workbookTemplates,
+  documents,
 }: {
   organizationId: string;
   projectId: string;
@@ -45,6 +52,7 @@ export function EstimateExplorer({
   resources: ProjectResourceRow[];
   assemblies: ProjectAssemblyRow[];
   workbookTemplates: WorkbookTemplateOption[];
+  documents: ProjectDocumentOption[];
 }) {
   const [tab, setTab] = useState<"schedule" | "resources">("schedule");
 
@@ -73,6 +81,7 @@ export function EstimateExplorer({
           lines={lines}
           markup={markup}
           workbookTemplates={workbookTemplates}
+          documents={documents}
         />
       ) : (
         <ProjectResourcesTab projectId={projectId} resources={resources} assemblies={assemblies} />

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { Upload, Download, Trash2, FileText } from "lucide-react";
+import { Upload, Download, Trash2, FileText, RotateCw } from "lucide-react";
 import { Badge, Button, FormField } from "@/components/ui";
 import { Modal } from "@/components/Modal";
-import { uploadDocument, deleteDocument, getDownloadUrl } from "./actions";
+import { uploadDocument, deleteDocument, getDownloadUrl, retryClassification } from "./actions";
 
 interface Category {
   id: string;
@@ -22,6 +22,7 @@ interface DocumentRow {
   size_bytes: number;
   storage_path: string;
   status: "processing" | "ready" | "failed";
+  status_error: string | null;
   uploaded_at: string;
 }
 
@@ -64,6 +65,10 @@ export function DocumentsTable({
     await deleteDocument(doc.id, doc.storage_path, projectId);
   }
 
+  async function handleRetry(doc: DocumentRow) {
+    await retryClassification(doc.id, projectId);
+  }
+
   return (
     <div>
       <div className="flex justify-end p-4">
@@ -98,10 +103,22 @@ export function DocumentsTable({
                 <td className="px-5 py-2.5 text-mid-gray">{formatBytes(doc.size_bytes)}</td>
                 <td className="px-5 py-2.5 text-mid-gray">{new Date(doc.uploaded_at).toLocaleString()}</td>
                 <td className="px-5 py-2.5">
-                  <Badge tone={STATUS_TONE[doc.status]}>{doc.status}</Badge>
+                  <span title={doc.status === "failed" ? doc.status_error ?? undefined : undefined}>
+                    <Badge tone={STATUS_TONE[doc.status]}>{doc.status}</Badge>
+                  </span>
                 </td>
                 <td className="px-5 py-2.5">
                   <div className="flex gap-3">
+                    {doc.status === "failed" ? (
+                      <button
+                        onClick={() => handleRetry(doc)}
+                        className="text-mid-gray hover:text-ink"
+                        aria-label="Retry AI classification"
+                        title="Retry AI classification"
+                      >
+                        <RotateCw className="h-4 w-4" />
+                      </button>
+                    ) : null}
                     <button
                       onClick={() => handleDownload(doc.storage_path)}
                       className="text-mid-gray hover:text-ink"

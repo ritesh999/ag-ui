@@ -17,6 +17,8 @@ export interface PricingLineRow {
   absorbed_indirect: number;
   sell_price: number | null;
   sort_order: number;
+  is_ai_generated: boolean;
+  ai_confirmed_at: string | null;
 }
 
 export interface MarkupSettingsRow {

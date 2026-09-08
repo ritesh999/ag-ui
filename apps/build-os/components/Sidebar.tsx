@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Database, FileSpreadsheet, FolderOpen, UserPlus } from "lucide-react";
+import { Building2, Database, FileSpreadsheet, FolderOpen, HelpCircle, UserPlus } from "lucide-react";
 import clsx from "clsx";
 import { OrgSwitcher } from "./OrgSwitcher";
+import { START_TOUR_EVENT } from "./ProductTour";
 import { signOut } from "@/app/(app)/actions";
 import type { UserOrganization } from "@/lib/current-org";
 
 const navItems = [
-  { href: "/projects", label: "Projects", icon: FolderOpen },
-  { href: "/resources", label: "Resources", icon: Database },
-  { href: "/workbook-templates", label: "Workbook Templates", icon: FileSpreadsheet },
+  { href: "/projects", label: "Projects", icon: FolderOpen, tour: "nav-projects" },
+  { href: "/resources", label: "Resources", icon: Database, tour: "nav-resources" },
+  { href: "/workbook-templates", label: "Workbook Templates", icon: FileSpreadsheet, tour: "nav-workbook-templates" },
 ];
 
 export function Sidebar({
@@ -32,7 +33,7 @@ export function Sidebar({
         <span className="text-sm font-semibold tracking-tight text-ink">Build OS</span>
       </div>
 
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-3" data-tour="org-switcher">
         <OrgSwitcher organizations={organizations} currentOrgId={currentOrgId} />
       </div>
 
@@ -44,6 +45,7 @@ export function Sidebar({
             <Link
               key={item.href}
               href={item.href}
+              data-tour={item.tour}
               className={clsx(
                 "flex items-center gap-2.5 rounded-[var(--radius-nested)] px-3 py-2 text-sm font-medium",
                 active ? "bg-primary-tint text-primary" : "text-ink-soft hover:bg-canvas"
@@ -56,9 +58,20 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="px-3 pb-3">
+      <div className="px-3">
+        <button
+          onClick={() => window.dispatchEvent(new Event(START_TOUR_EVENT))}
+          className="flex w-full items-center gap-2.5 rounded-[var(--radius-nested)] px-3 py-2 text-sm font-medium text-ink-soft hover:bg-canvas"
+        >
+          <HelpCircle className="h-4 w-4" />
+          Take a Tour
+        </button>
+      </div>
+
+      <div className="px-3 pb-3 pt-1">
         <Link
           href="/organization"
+          data-tour="invite-teammates"
           className="block rounded-[var(--radius-nested)] border border-hairline bg-paper p-3 hover:bg-canvas"
         >
           <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">

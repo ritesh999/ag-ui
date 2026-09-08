@@ -21,7 +21,7 @@ export default async function ProjectOverviewPage({ params }: { params: { id: st
 
   const { data: documents } = await supabase
     .from("project_documents")
-    .select("id, category_id, file_name, file_type, size_bytes, storage_path, status, uploaded_at")
+    .select("id, category_id, file_name, file_type, size_bytes, storage_path, status, status_error, uploaded_at")
     .eq("project_id", params.id)
     .order("uploaded_at", { ascending: false });
 

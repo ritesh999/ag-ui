@@ -6,7 +6,7 @@ estimate and subcontract procurement plan out. Not a site-execution tool
 (no RFIs, submittals, or daily logs — see `apps/construction-manager` in
 this repo for that).
 
-## Status: steps 1-7 done (schema, auth/orgs, resources, projects/documents, pricing engine, WBS/procurement, workbook templates)
+## Status: all 8 build-order steps done (schema, auth/orgs, resources, projects/documents, pricing engine, WBS/procurement, workbook templates, AI integration + product tour)
 
 Built in the order the build prompt specifies, each stopped and reviewed
 before moving on:
@@ -38,20 +38,32 @@ before moving on:
   circular-reference detection), and an "Apply Workbook" action on the
   Estimate tab that generates a new pricing schedule section from a
   template's rows.
+- **Step 8** — AI integration + product tour: a real Anthropic API
+  integration (the user explicitly chose this over a scaffold-only
+  option) that classifies uploaded tender documents into
+  `document_categories` and can suggest pricing lines from a document's
+  text, both flagged `is_ai_generated` and requiring confirmation before
+  counting toward any total (a real gap in the step 5 pricing engine,
+  fixed here — see below); plus a lightweight, dependency-free product
+  tour over the app shell.
 
 ```
 app/               Next.js App Router pages
-components/        Sidebar, org switcher, Modal, and small UI primitives (DESIGN.md tokens)
+components/        Sidebar, org switcher, Modal, ProductTour, small UI primitives (DESIGN.md tokens)
 lib/               Supabase client/server glue, current-org resolution, auth bootstrap,
-                    resource constants, pricing-engine.ts (client preview mirror)
+                    resource constants, pricing-engine.ts (client preview mirror),
+                    formula-evaluator.ts, audit-log.ts, tour-steps.ts,
+                    ai/ (client.ts, extract-text.ts, classify-document.ts, suggest-pricing-lines.ts)
 middleware.ts      Session refresh + route protection
 db/
-  migrations/      13 SQL files, apply in order 0001 -> 0013
+  migrations/      14 SQL files, apply in order 0001 -> 0014
   dev/             a local-only stand-in for Supabase's auth + storage schemas/roles
   tests/           scripted RLS + RPC + pricing-engine tests (actually run — see below)
   SCHEMA_REVIEW.md  step 1's review doc
 scripts/           verify-pricing-engine-parity.mjs (JS-vs-SQL parity),
-                    verify-formula-evaluator.mjs (workbook formula unit tests)
+                    verify-formula-evaluator.mjs (workbook formula unit tests),
+                    verify-ai-integration-wiring.mjs (text-extraction + fail-fast checks —
+                    NOT a live Claude API test, see Step 8 notes)
 STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 ```
 
@@ -201,6 +213,87 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   template that generated them beyond being grouped under a section
   named after it.
 
+### Step 8 specifics worth knowing
+
+- **A real Anthropic API integration, by explicit choice.** Before
+  building this step, the user was asked whether to scaffold a
+  placeholder AI flow or wire up a real `@anthropic-ai/sdk` integration
+  (which needs an API key and a new dependency, outside the originally
+  approved stack). They chose the real integration. `lib/ai/client.ts`,
+  `classify-document.ts`, and `suggest-pricing-lines.ts` call
+  `claude-opus-5` using forced, `strict: true` tool calls for
+  schema-guaranteed structured output (a single tool definition + forced
+  `tool_choice`, no free-text JSON parsing/repair step) — see each
+  file's own comments for the exact reasoning.
+- **Text extraction is real for PDF, honest about its limit for DOCX/XLSX.**
+  `lib/ai/extract-text.ts` uses `pdf-parse` (one new dependency, actually
+  exercised — `scripts/verify-ai-integration-wiring.mjs` builds a real
+  minimal PDF byte-for-byte and confirms the extracted text comes back
+  correctly). DOCX/XLSX parsing would need at least one more library
+  each; adding those wasn't part of what was scoped when "real
+  integration" was approved, so those file types fall back to
+  filename-only classification — a stated, deliberate limitation, not a
+  silently-fake capability.
+- **Classification runs automatically, but only when the user didn't
+  already categorize the document themselves** — `uploadDocument`
+  (`app/(app)/projects/[id]/actions.ts`) only sets `status = 'processing'`
+  and triggers classification when `category_id` is left unset on
+  upload; AI is there to help when someone skips that step, never to
+  second-guess an explicit human choice. `project_documents.status_error`
+  (present in the schema since step 1, never used until now) surfaces
+  what went wrong on a `'failed'` classification, and a
+  `retryClassification` action re-downloads the file and tries again.
+- **Fixed a real gap in step 5's pricing engine**: spec 5 requires "every
+  AI-generated line ... requires human confirmation before it counts
+  toward a total," and `0004_pricing.sql`'s own comment on
+  `ai_confirmed_at` documented this as the pricing engine's job — but
+  0013's first version of `recompute_project_pricing()` never actually
+  implemented it; every direct line counted regardless of
+  `is_ai_generated`/`ai_confirmed_at`. `0014_ai_generated_line_confirmation.sql`
+  fixes this: an unconfirmed AI line still shows its own cost (so a
+  reviewer can see what they'd be agreeing to) but contributes nothing to
+  `directTotal`/`indirectTotal`/the grand total, and carries no sell
+  price, until `ai_confirmed_at` is set — at which point the existing
+  reactive trigger picks it up and reprices everything exactly as if it
+  had always been a normal line. `db/tests/ai_generated_line_test.sql`
+  hand-verifies both states against a real local Postgres. The Pricing
+  Schedule UI's Confirm/Unconfirm buttons and the AI-suggestion sparkle
+  badge are built directly on top of this fix.
+- **AI-suggested pricing lines land in one shared "AI Suggestions"
+  section per project**, created on first use rather than per document,
+  so unconfirmed suggestions from multiple runs stay grouped in one
+  obvious place instead of scattering a new section every time.
+- **The product tour has no dependency and no backend** — a fixed-position
+  spotlight (a large `box-shadow` doubles as the dimmed backdrop with a
+  see-through cutout around the target element, a common CSS technique)
+  plus a positioned tooltip, driven entirely by `data-tour="..."`
+  attributes already on the Sidebar and a `localStorage` flag for
+  "seen once." Deliberately scoped to the app shell (org switcher, the
+  three nav items, Invite Teammates) rather than one tour per feature
+  page — those pages only make sense once a project/resource/template
+  already exists, and pointing a tour at something not on screen yet is
+  worse than not touring it at all. Restartable any time via the
+  sidebar's "Take a Tour" link (a plain `window` custom event, since only
+  two components need to coordinate — not worth a React context for that).
+- **What could and couldn't be validated in this environment**: exactly
+  like every other step, there is no live Supabase project or Docker
+  daemon here, so none of step 8's UI (document upload triggering
+  classification, the Suggest/Confirm/Unconfirm flow, the product tour)
+  could be clicked through in a real browser. Beyond that usual gap, this
+  step has one more: **no `ANTHROPIC_API_KEY` exists in this
+  environment either**, so the actual Claude API call inside
+  `classify-document.ts`/`suggest-pricing-lines.ts` was never invoked
+  end-to-end — not even once. What could be verified without either was
+  verified (`scripts/verify-ai-integration-wiring.mjs`: real PDF text
+  extraction, the DOCX/XLSX fallback, and the fail-fast error when no key
+  is set), and the request/tool-schema shapes were written directly
+  against the Anthropic TypeScript SDK's own documented patterns (forced
+  `tool_choice`, `strict: true` schemas) rather than guessed — but the
+  live round-trip itself is the one piece of this entire project that is
+  genuinely untested, and that gap is stated plainly rather than
+  glossed over. Set `ANTHROPIC_API_KEY` in `.env.local` to actually
+  exercise it.
+
 ### What step 2 decided (all confirmed, all built accordingly)
 
 - **Invite flow**: pending membership by email, no account created until
@@ -219,9 +312,12 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 ### Setup to actually run this
 
 1. Copy `.env.local.example` to `.env.local` and fill in your Supabase
-   project's URL + anon key (Settings -> API).
+   project's URL + anon key (Settings -> API), and — only if you want
+   the AI document classification / pricing-suggestion features to
+   actually work rather than fail with a clear "not configured" error —
+   an `ANTHROPIC_API_KEY` from https://console.anthropic.com/settings/keys.
 2. Run the migrations against that project — `db/build-os-full-schema.sql`
-   or `db/migrations/0001` through `0013` in order, via the SQL Editor or
+   or `db/migrations/0001` through `0014` in order, via the SQL Editor or
    `psql`. If you already ran an earlier version of the combined file,
    you only need whatever new `NNNN_*.sql` files you haven't applied yet
    — everything here uses `create or replace` / `if not exists` /
@@ -287,12 +383,27 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
   confirms the pricing engine trigger (step 5) picks up a workbook-applied
   line exactly like a manually-entered one — line_total and sell_price
   compute correctly with no special-casing needed. 2/2 scenarios pass.
+- `db/tests/ai_generated_line_test.sql`: an unconfirmed AI-generated
+  direct line shows its own cost but is fully excluded from
+  `directTotal`/`indirectTotal`/every other line's absorbed-indirect
+  share and sell price; confirming it (`ai_confirmed_at`) reactively
+  brings it into every total with no explicit recompute call, matching
+  hand-calculated numbers exactly. 2/2 scenarios pass — this is the fix
+  for the step 5 gap described above.
+- `scripts/verify-ai-integration-wiring.mjs`: real `pdf-parse` extraction
+  against a hand-built minimal PDF (not a stub — the actual library runs
+  and the extracted text is checked), the DOCX/XLSX no-op fallback, and
+  `getAnthropicClient()` failing fast with a clear message when
+  `ANTHROPIC_API_KEY` is unset. 4/4 checks pass. This is explicitly
+  **not** a test of the live Claude API call itself — see the Step 8
+  section above for why that couldn't be exercised in this environment.
 - All of the above were run against a real local Postgres 16 with a
   stubbed `auth`/`storage` schema (no live Supabase project or Docker
   daemon available in this environment — flagged, not skipped silently).
-  Neither the Pricing Schedule, the Subcontractors, nor the Workbook
-  Templates UI could be exercised in a live browser for the same reason
-  (no Supabase project to sign into) — each is validated by the
+  None of the UI built across steps 5-8 (Pricing Schedule, Subcontractors,
+  Workbook Templates, document classification, AI pricing suggestions,
+  the product tour) could be exercised in a live browser for the same
+  reason (no Supabase project to sign into) — each is validated by the
   production build's type-check plus the DB/unit tests above, not by
   clicking through it, and that gap is flagged rather than silently
   claimed as tested.
@@ -340,5 +451,15 @@ STEP2_PLAN.md      step 2's plan + the 4 decisions confirmed before building
 
 ### What's still not built
 
-AI integration + product tours (step 8) — unchanged from the build
-prompt's order.
+All 8 build-order steps are done. What's left is scope that was
+explicitly deferred along the way, not skipped silently — each is
+called out where it comes up above:
+
+- DOCX/XLSX text extraction (AI classification/suggestion falls back to
+  filename-only for those file types — step 8).
+- A live end-to-end test of the Anthropic API call itself — no
+  `ANTHROPIC_API_KEY` in this environment (step 8).
+- A `workbook_applications` audit table (step 7) — flagged as optional
+  in `db/SCHEMA_REVIEW.md`, not confirmed as needed.
+- Clicking through any of it in a real browser — no live Supabase
+  project or Docker daemon in this environment, true since step 2.

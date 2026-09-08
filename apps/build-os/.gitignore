@@ -1,6 +1,9 @@
 # dependencies
 /node_modules
 
+# scratch dir scripts/verify-ai-integration-wiring.mjs compiles into (self-cleans; ignored as a safety net)
+/.ai-wiring-build-*
+
 # next.js
 /.next/
 /out/

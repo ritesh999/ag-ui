@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { logFieldChanges, logRowEvent } from "@/lib/audit-log";
 import { evaluateWorkbookTemplate, type WorkbookRowInput } from "@/lib/formula-evaluator";
+import { extractDocumentText } from "@/lib/ai/extract-text";
+import { suggestPricingLines } from "@/lib/ai/suggest-pricing-lines";
 
 type FormState = { error?: string } | undefined;
 
@@ -190,6 +192,37 @@ export async function deletePricingLine(lineId: string, projectId: string) {
   revalidatePath(`/projects/${projectId}/estimate`);
 }
 
+// Spec 5: "Every AI-generated line is flagged as such and requires human
+// confirmation before it counts toward a total." Setting ai_confirmed_at
+// is the confirmation — 0014_ai_generated_line_confirmation.sql's trigger
+// picks up this column change and reactively brings the line into
+// directTotal/indirectTotal, no separate recompute call needed here.
+export async function confirmAiGeneratedLine(lineId: string, projectId: string, organizationId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("pricing_lines").update({ ai_confirmed_at: new Date().toISOString() }).eq("id", lineId);
+  if (error) return { error: error.message };
+
+  await logFieldChanges(supabase, organizationId, "pricing_lines", lineId, { ai_confirmed_at: null }, { ai_confirmed_at: "confirmed" });
+
+  revalidatePath(`/projects/${projectId}/estimate`);
+  return {};
+}
+
+// Reverses a confirmation — the line drops back out of the totals
+// (still visible, still showing its own cost) without being deleted, in
+// case a reviewer wants to reconsider an AI suggestion after confirming
+// it.
+export async function unconfirmAiGeneratedLine(lineId: string, projectId: string, organizationId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("pricing_lines").update({ ai_confirmed_at: null }).eq("id", lineId);
+  if (error) return { error: error.message };
+
+  await logFieldChanges(supabase, organizationId, "pricing_lines", lineId, { ai_confirmed_at: "confirmed" }, { ai_confirmed_at: null });
+
+  revalidatePath(`/projects/${projectId}/estimate`);
+  return {};
+}
+
 // Swaps sort_order with the sibling immediately before/after this line
 // within the same grouping (its section for direct lines, or the whole
 // indirect band). Two updates rather than a single-statement swap because
@@ -360,6 +393,100 @@ export async function applyWorkbookToProject(templateId: string, projectId: stri
 
   const { error: linesError } = await supabase.from("pricing_lines").insert(newLines);
   if (linesError) return { error: linesError.message };
+
+  revalidatePath(`/projects/${projectId}/estimate`);
+  return {};
+}
+
+// Spec 5: AI-suggested pricing lines, extracted/inferred from an already-
+// uploaded tender document. Always inserted as is_ai_generated=true,
+// ai_confirmed_at=null — they show up under a dedicated "AI Suggestions"
+// section and contribute nothing to any total (0014's engine change)
+// until confirmed one by one on the Pricing Schedule.
+export async function suggestPricingLinesFromDocument(documentId: string, projectId: string, organizationId: string) {
+  const supabase = await createClient();
+
+  const { data: doc } = await supabase
+    .from("project_documents")
+    .select("file_name, file_type, storage_path, category_id")
+    .eq("id", documentId)
+    .single();
+  if (!doc) return { error: "Document not found." };
+
+  const { data: blob, error: downloadError } = await supabase.storage.from("project-documents").download(doc.storage_path);
+  if (downloadError || !blob) return { error: downloadError?.message ?? "Could not download the file from storage." };
+
+  const text = await extractDocumentText(await blob.arrayBuffer(), doc.file_type);
+  if (!text) {
+    return {
+      error: `Pricing suggestions need extractable text, which isn't wired up for ${doc.file_type.toUpperCase()} files yet — only PDF is supported.`,
+    };
+  }
+
+  let categoryLabel: string | null = null;
+  if (doc.category_id) {
+    const { data: category } = await supabase.from("document_categories").select("label").eq("id", doc.category_id).single();
+    categoryLabel = category?.label ?? null;
+  }
+
+  let suggestions;
+  try {
+    suggestions = await suggestPricingLines(text, categoryLabel);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "AI pricing suggestion failed." };
+  }
+
+  if (suggestions.length === 0) {
+    return { error: "The AI didn't find any clearly identifiable pricing items in this document." };
+  }
+
+  // One shared section per project for AI suggestions, created on first
+  // use rather than per document — keeps unconfirmed suggestions grouped
+  // in one obvious place rather than scattering a new section per run.
+  let { data: section } = await supabase
+    .from("pricing_sections")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("name", "AI Suggestions")
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!section) {
+    const { data: newSection, error: sectionError } = await supabase
+      .from("pricing_sections")
+      .insert({ organization_id: organizationId, project_id: projectId, cost_type: "direct", name: "AI Suggestions" })
+      .select("id")
+      .single();
+    if (sectionError) return { error: sectionError.message };
+    section = newSection;
+  }
+
+  const { count: existingCount } = await supabase
+    .from("pricing_lines")
+    .select("id", { count: "exact", head: true })
+    .eq("section_id", section.id);
+  const startIndex = existingCount ?? 0;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const newLines = suggestions.map((s, i) => ({
+    organization_id: organizationId,
+    project_id: projectId,
+    section_id: section!.id,
+    cost_type: s.costType,
+    item_code: `AI.${startIndex + i + 1}`,
+    description: s.description,
+    quantity: s.quantity,
+    unit: s.unit,
+    rate: s.rate,
+    is_ai_generated: true,
+    created_by: user?.id ?? null,
+  }));
+
+  const { error: insertError } = await supabase.from("pricing_lines").insert(newLines);
+  if (insertError) return { error: insertError.message };
 
   revalidatePath(`/projects/${projectId}/estimate`);
   return {};

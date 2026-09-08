@@ -1,16 +1,23 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, FileSpreadsheet } from "lucide-react";
-import { Button, Card } from "@/components/ui";
+import { Plus, Pencil, Trash2, ChevronUp, ChevronDown, FileSpreadsheet, Sparkles } from "lucide-react";
+import { Badge, Button, Card } from "@/components/ui";
 import type { PricingLineRow, PricingSectionRow, MarkupSettingsRow } from "./types";
-import { deletePricingSection, deletePricingLine, movePricingLine } from "./actions";
+import {
+  deletePricingSection,
+  deletePricingLine,
+  movePricingLine,
+  confirmAiGeneratedLine,
+  unconfirmAiGeneratedLine,
+} from "./actions";
 import { AddSectionModal } from "./AddSectionModal";
 import { LineModal } from "./LineModal";
 import { MarkupPanel } from "./MarkupPanel";
 import { ApplyWorkbookModal } from "./ApplyWorkbookModal";
+import { SuggestPricingLinesModal } from "./SuggestPricingLinesModal";
 import { formatMoney } from "./format";
-import type { WorkbookTemplateOption } from "./EstimateExplorer";
+import type { WorkbookTemplateOption, ProjectDocumentOption } from "./EstimateExplorer";
 
 export function PricingScheduleTab({
   organizationId,
@@ -19,6 +26,7 @@ export function PricingScheduleTab({
   lines,
   markup,
   workbookTemplates,
+  documents,
 }: {
   organizationId: string;
   projectId: string;
@@ -26,11 +34,13 @@ export function PricingScheduleTab({
   lines: PricingLineRow[];
   markup: MarkupSettingsRow | null;
   workbookTemplates: WorkbookTemplateOption[];
+  documents: ProjectDocumentOption[];
 }) {
   const [addSectionOpen, setAddSectionOpen] = useState(false);
   const [lineModalOpen, setLineModalOpen] = useState(false);
   const [editingLine, setEditingLine] = useState<PricingLineRow | null>(null);
   const [applyWorkbookOpen, setApplyWorkbookOpen] = useState(false);
+  const [suggestLinesOpen, setSuggestLinesOpen] = useState(false);
 
   const directLinesBySection = useMemo(() => {
     const map = new Map<string, PricingLineRow[]>();
@@ -74,20 +84,59 @@ export function PricingScheduleTab({
     await deletePricingLine(line.id, projectId);
   }
 
+  async function handleConfirmAiLine(line: PricingLineRow) {
+    await confirmAiGeneratedLine(line.id, projectId, organizationId);
+  }
+
+  async function handleUnconfirmAiLine(line: PricingLineRow) {
+    await unconfirmAiGeneratedLine(line.id, projectId, organizationId);
+  }
+
   function renderLineRow(line: PricingLineRow, siblings: PricingLineRow[], index: number) {
+    const isUnconfirmedAi = line.is_ai_generated && !line.ai_confirmed_at;
     return (
-      <tr key={line.id} className="hover:bg-canvas">
-        <td className="px-4 py-2 font-medium text-ink">{line.item_code}</td>
+      <tr key={line.id} className={isUnconfirmedAi ? "bg-primary-tint hover:bg-primary-tint" : "hover:bg-canvas"}>
+        <td className="px-4 py-2 font-medium text-ink">
+          <div className="flex items-center gap-1.5">
+            {line.item_code}
+            {line.is_ai_generated ? (
+              <span title={line.ai_confirmed_at ? "AI-suggested, confirmed" : "AI-suggested — not yet confirmed"}>
+                <Sparkles className={isUnconfirmedAi ? "h-3.5 w-3.5 text-primary" : "h-3.5 w-3.5 text-mid-gray"} />
+              </span>
+            ) : null}
+          </div>
+        </td>
         <td className="px-4 py-2 text-mid-gray">{line.description || "—"}</td>
         <td className="px-4 py-2 text-mid-gray">{line.quantity}</td>
         <td className="px-4 py-2 text-mid-gray">{line.unit ?? "—"}</td>
         <td className="px-4 py-2 text-mid-gray">{formatMoney(line.rate)}</td>
         <td className="px-4 py-2 text-mid-gray">{formatMoney(line.line_total)}</td>
         <td className="px-4 py-2 font-medium text-ink">
-          {line.cost_type === "indirect" ? "—" : formatMoney(line.sell_price)}
+          {isUnconfirmedAi ? (
+            <Badge tone="outline">Not counted yet</Badge>
+          ) : line.cost_type === "indirect" ? (
+            "—"
+          ) : (
+            formatMoney(line.sell_price)
+          )}
         </td>
         <td className="px-4 py-2">
           <div className="flex items-center gap-2">
+            {isUnconfirmedAi ? (
+              <button
+                onClick={() => handleConfirmAiLine(line)}
+                className="whitespace-nowrap text-xs font-medium text-primary hover:underline"
+              >
+                Confirm
+              </button>
+            ) : line.is_ai_generated ? (
+              <button
+                onClick={() => handleUnconfirmAiLine(line)}
+                className="whitespace-nowrap text-xs font-medium text-mid-gray hover:underline"
+              >
+                Unconfirm
+              </button>
+            ) : null}
             <button
               disabled={index === 0}
               onClick={() => movePricingLine(line.id, siblings[index - 1].id, projectId)}
@@ -135,6 +184,10 @@ export function PricingScheduleTab({
           <Button variant="outline" onClick={() => setApplyWorkbookOpen(true)}>
             <FileSpreadsheet className="mr-1.5 h-4 w-4" />
             Apply Workbook
+          </Button>
+          <Button variant="outline" onClick={() => setSuggestLinesOpen(true)}>
+            <Sparkles className="mr-1.5 h-4 w-4" />
+            Suggest Lines from Document
           </Button>
         </div>
 
@@ -255,6 +308,13 @@ export function PricingScheduleTab({
         workbookTemplates={workbookTemplates}
         open={applyWorkbookOpen}
         onClose={() => setApplyWorkbookOpen(false)}
+      />
+      <SuggestPricingLinesModal
+        organizationId={organizationId}
+        projectId={projectId}
+        documents={documents}
+        open={suggestLinesOpen}
+        onClose={() => setSuggestLinesOpen(false)}
       />
     </div>
   );

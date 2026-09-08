@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrganizations, resolveCurrentOrgId } from "@/lib/current-org";
 import { Sidebar } from "@/components/Sidebar";
+import { ProductTour } from "@/components/ProductTour";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -28,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="flex-1 overflow-y-auto p-8">
         <div className="mx-auto max-w-[1280px]">{children}</div>
       </main>
+      <ProductTour />
     </div>
   );
 }
